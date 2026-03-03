@@ -8,13 +8,10 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
   html, body {
-    height: 100%;
-    width: 100%;
-    overflow: hidden;
+    height: 100%; width: 100%; overflow: hidden;
     background: #0d1117;
     font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-    font-size: 14px;
-    color: #e6edf3;
+    font-size: 14px; color: #e6edf3;
   }
 
   #editor { width: 100%; height: 100%; position: relative; }
@@ -26,59 +23,55 @@
 
   #highlight-layer {
     padding: 24px 28px;
-    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-    font-size: 14px; line-height: 1.75;
+    font-family: inherit; font-size: 14px; line-height: 1.75;
     white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;
-    letter-spacing: 0px; tab-size: 2; -moz-tab-size: 2;
-    min-height: 100%;
+    tab-size: 2; min-height: 100%;
   }
 
   #input {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    padding: 24px 28px; background: transparent; color: transparent;
-    caret-color: #58a6ff; border: none; outline: none; resize: none;
-    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-    font-size: 14px; line-height: 1.75; z-index: 2;
+    padding: 24px 28px; background: transparent;
+    color: transparent; caret-color: #58a6ff;
+    border: none; outline: none; resize: none;
+    font-family: inherit; font-size: 14px; line-height: 1.75; z-index: 2;
     white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;
-    letter-spacing: 0px; tab-size: 2; -moz-tab-size: 2;
-    -webkit-text-fill-color: transparent; overflow: auto;
+    tab-size: 2; -webkit-text-fill-color: transparent; overflow: auto;
   }
 
   #input::selection { background: rgba(56, 139, 253, 0.3); }
-  #input::-moz-selection { background: rgba(56, 139, 253, 0.3); }
 
-  /* Syntax colors */
-  .h1 { color: #ff7b72; font-weight: 700; }
-  .h2 { color: #ffa657; font-weight: 700; }
-  .h3 { color: #e3b341; font-weight: 600; }
-  .h4 { color: #7ee787; font-weight: 600; }
-  .h5 { color: #79c0ff; font-weight: 600; }
-  .h6 { color: #d2a8ff; font-weight: 600; }
-  .hm { opacity: 0.35; }
-  .b  { color: #ffa657; font-weight: 700; }
-  .bm { color: #ffa657; opacity: 0.35; }
-  .i  { color: #d2a8ff; font-style: italic; }
-  .im { color: #d2a8ff; opacity: 0.35; }
-  .bi { color: #f0883e; font-weight: 700; font-style: italic; }
-  .bim{ color: #f0883e; opacity: 0.35; }
-  .s  { color: #6e7681; text-decoration: line-through; }
-  .sm { color: #6e7681; opacity: 0.35; }
-  .c  { color: #79c0ff; background: rgba(110,118,129,0.15); border-radius: 3px; }
-  .cm { color: #79c0ff; opacity: 0.3; }
-  .cf { color: #7ee787; opacity: 0.4; }
-  .cb { color: #8b949e; }
-  .lb { color: #58a6ff; opacity: 0.35; }
-  .lt { color: #58a6ff; text-decoration: underline; text-underline-offset: 2px; }
-  .lu { color: #6e7681; }
-  .ib { color: #d2a8ff; opacity: 0.4; }
-  .bqm{ color: #484f58; }
-  .bq { color: #8b949e; }
-  .ul { color: #ff7b72; font-weight: 700; }
-  .ol { color: #ffa657; font-weight: 700; }
-  .con{ color: #7ee787; font-weight: 700; }
-  .coff{color: #484f58; font-weight: 700; }
-  .hr { color: #30363d; font-weight: 700; }
-  .tx { color: #e6edf3; }
+  /* Syntax colours */
+  .tx  { color: #e6edf3; }
+  .h1  { color: #ff7b72; font-weight: 700; }
+  .h2  { color: #ffa657; font-weight: 700; }
+  .h3  { color: #e3b341; font-weight: 600; }
+  .h4  { color: #7ee787; font-weight: 600; }
+  .h5  { color: #79c0ff; font-weight: 600; }
+  .h6  { color: #d2a8ff; font-weight: 600; }
+  .hm  { opacity: 0.35; }
+  .b   { color: #ffa657; font-weight: 700; }
+  .bm  { color: #ffa657; opacity: 0.35; }
+  .i   { color: #d2a8ff; font-style: italic; }
+  .im  { color: #d2a8ff; opacity: 0.35; }
+  .bi  { color: #f0883e; font-weight: 700; font-style: italic; }
+  .bim { color: #f0883e; opacity: 0.35; }
+  .s   { color: #6e7681; text-decoration: line-through; }
+  .sm  { color: #6e7681; opacity: 0.35; }
+  .c   { color: #79c0ff; background: rgba(110,118,129,0.15); border-radius: 3px; }
+  .cm  { color: #79c0ff; opacity: 0.3; }
+  .cf  { color: #7ee787; opacity: 0.4; }
+  .cb  { color: #8b949e; }
+  .lb  { color: #58a6ff; opacity: 0.35; }
+  .lt  { color: #58a6ff; text-decoration: underline; text-underline-offset: 2px; }
+  .lu  { color: #6e7681; }
+  .ib  { color: #d2a8ff; opacity: 0.4; }
+  .bqm { color: #484f58; }
+  .bq  { color: #8b949e; }
+  .ul  { color: #ff7b72; font-weight: 700; }
+  .ol  { color: #ffa657; font-weight: 700; }
+  .con { color: #7ee787; font-weight: 700; }
+  .coff{ color: #484f58; font-weight: 700; }
+  .hr  { color: #30363d; font-weight: 700; }
 
   #input::-webkit-scrollbar, #backdrop::-webkit-scrollbar { width: 6px; }
   #input::-webkit-scrollbar-track, #backdrop::-webkit-scrollbar-track { background: transparent; }
@@ -86,107 +79,93 @@
 </style>
 </head>
 <body>
-
 <div id="editor">
   <div id="backdrop"><div id="highlight-layer"></div></div>
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
 </div>
-
 <script>
-(function() {
+(function () {
   'use strict';
 
-  var input = document.getElementById('input');
-  var backdrop = document.getElementById('backdrop');
-  var hl = document.getElementById('highlight-layer');
+  var input   = document.getElementById('input');
+  var backdrop= document.getElementById('backdrop');
+  var hl      = document.getElementById('highlight-layer');
 
-  // ================================================================
-  //  STANDARD NOTES — self-contained save protocol, no libraries
-  //
-  //  How it works:
-  //  1. On load, send 'ready' to parent (SN)
-  //  2. SN replies with 'component-registered' containing a sessionKey
-  //  3. We send 'stream-context-item' to ask for the current note
-  //  4. SN sends us the note via 'stream-context-item'
-  //  5. When user types, we send 'save-items' with the updated note
-  // ================================================================
+  // ── State ──────────────────────────────────────────────────
+  var sessionKey  = null;
+  var currentItem = null;   // the full item object SN sent us
+  var noteLoaded  = false;  // true only after SN delivers the note
+  var saveTimer   = null;
 
-  var sessionKey = null;
-  var currentItem = null;
-  var saveTimer = null;
+  // ── Messaging helpers ───────────────────────────────────────
+  function uid() { return Math.random().toString(36).slice(2) + Date.now(); }
 
-  function genId() {
-    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  function send(action, data) {
+    var msg = { action: action, data: data || {}, messageId: uid(), api: 'component' };
+    if (sessionKey) msg.sessionKey = sessionKey;
+    window.parent.postMessage(JSON.stringify(msg), '*');
   }
 
-  function post(action, data) {
-    window.parent.postMessage(JSON.stringify({
-      action: action,
-      data: data || {},
-      messageId: genId(),
-      sessionKey: sessionKey,
-      api: 'component'
-    }), '*');
-  }
-
-  window.addEventListener('message', function(event) {
+  // ── SN message handler ──────────────────────────────────────
+  window.addEventListener('message', function (event) {
     var msg;
     try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
-    catch(e) { return; }
+    catch (e) { return; }
     if (!msg || !msg.action) return;
 
+    // Step 2: SN confirms registration → ask for the note
     if (msg.action === 'component-registered') {
       sessionKey = msg.sessionKey || null;
-      // Ask SN to stream us the current note
-      post('stream-context-item');
+      send('stream-context-item');
+      return;
     }
 
+    // Step 3: SN delivers the note to us
     if (msg.action === 'stream-context-item') {
       var item = msg.data && msg.data.item;
-      if (!item) return;
-      // isMetadataUpdate = SN is just telling us about a lock/tag change, not a new note
+      if (!item || !item.content) return;
+
+      // isMetadataUpdate = just a tag/lock change, NOT a new note — skip it
       if (item.isMetadataUpdate) return;
-      currentItem = item;
-      var text = (item.content && item.content.text) ? item.content.text : '';
-      if (input.value !== text) {
-        input.value = text;
-        render();
-      }
+
+      // Store the full item — we'll mutate content.text on save
+      currentItem = JSON.parse(JSON.stringify(item));
+
+      // Load text into editor
+      var text = currentItem.content.text || '';
+      input.value = text;
+      noteLoaded = true;   // ← only set after real note arrives
+      render();
+      return;
     }
   });
 
-  // Step 1: announce we are ready — SN won't talk to us until we do this
-  post('ready');
+  // Step 1: tell SN we exist — must be first, no sessionKey yet
+  send('ready');
 
+  // ── Save ────────────────────────────────────────────────────
   function doSave() {
-    if (!currentItem) return;
-    // Update text on our local copy of the item
+    // NEVER save if we haven't received the note yet —
+    // this prevents overwriting a note with empty content
+    if (!noteLoaded || !currentItem) return;
+
     currentItem.content.text = input.value;
-    // Send the whole item back to SN — it will persist it
-    post('save-items', { items: [ currentItem ] });
+
+    // Send back the complete item — SN needs all original fields
+    send('save-items', { items: [currentItem] });
   }
 
-  function save() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(doSave, 300);
-  }
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 350); }
+  function saveNow()       { clearTimeout(saveTimer); doSave(); }
 
-  function saveNow() {
-    clearTimeout(saveTimer);
-    doSave();
-  }
-
-  input.addEventListener('input', function() { render(); save(); });
-  input.addEventListener('blur', saveNow);
+  input.addEventListener('input', function () { render(); scheduleSave(); });
+  input.addEventListener('blur',  saveNow);
   window.addEventListener('blur', saveNow);
-  document.addEventListener('visibilitychange', function() { if (document.hidden) saveNow(); });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) saveNow(); });
 
-  // ================================================================
-  //  HIGHLIGHTING  (your original code, unchanged)
-  // ================================================================
-
+  // ── Highlighting ────────────────────────────────────────────
   function esc(t) {
-    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
   function inl(s) {
@@ -214,141 +193,96 @@
     s = s.replace(/__(.+?)__/g, function(_,t) {
       return '<span class="bm">__</span><span class="b">'+t+'</span><span class="bm">__</span>';
     });
-    s = s.replace(/(?<!\*)\*([^\*]+)\*(?!\*)/g, function(_,t) {
+    s = s.replace(/(?<!\*)\*([^\*\n]+)\*(?!\*)/g, function(_,t) {
       return '<span class="im">*</span><span class="i">'+t+'</span><span class="im">*</span>';
     });
-    s = s.replace(/(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/g, function(_,t) {
+    s = s.replace(/(?<![a-zA-Z0-9])_([^_\n]+)_(?![a-zA-Z0-9])/g, function(_,t) {
       return '<span class="im">_</span><span class="i">'+t+'</span><span class="im">_</span>';
     });
     return s;
   }
 
   function highlight(text) {
-    var lines = text.split('\n');
-    var out = [];
-    var inCode = false;
+    var lines = text.split('\n'), out = [], inCode = false;
     for (var i = 0; i < lines.length; i++) {
-      var raw = lines[i];
-      var escaped = esc(raw);
+      var raw = lines[i], x = esc(raw);
+
       if (/^(`{3,}|~{3,})/.test(raw)) {
         inCode = !inCode;
-        out.push('<span class="cf">'+escaped+'</span>');
+        out.push('<span class="cf">'+x+'</span>');
         continue;
       }
-      if (inCode) { out.push('<span class="cb">'+escaped+'</span>'); continue; }
+      if (inCode) { out.push('<span class="cb">'+x+'</span>'); continue; }
+
       if (/^\s{0,3}([-*_])\s*(\1\s*){2,}$/.test(raw)) {
-        out.push('<span class="hr">'+escaped+'</span>'); continue;
+        out.push('<span class="hr">'+x+'</span>'); continue;
       }
+
       var hm = raw.match(/^(#{1,6})\s(.*)/);
       if (hm) {
-        out.push('<span class="h'+hm[1].length+'"><span class="hm">'+esc(hm[1])+'</span> '+inl(esc(hm[2]))+'</span>');
+        out.push('<span class="h'+hm[1].length+'"><span class="hm">'+esc(hm[1])+'</span><span class="tx"> </span>'+inl(esc(hm[2]))+'</span>');
         continue;
       }
-      var bm = raw.match(/^(\s{0,3}>+)(.*)/);
-      if (bm) {
-        out.push('<span class="bqm">'+esc(bm[1])+'</span><span class="bq">'+inl(esc(bm[2]))+'</span>');
+
+      var bq = raw.match(/^(\s{0,3}>+)(.*)/);
+      if (bq) {
+        out.push('<span class="bqm">'+esc(bq[1])+'</span><span class="bq">'+inl(esc(bq[2]))+'</span>');
         continue;
       }
-      var um = raw.match(/^(\s*)([-*+])\s(.*)/);
-      if (um) {
-        var cm = um[3].match(/^\[([ xX])\]\s?(.*)/);
-        if (cm) {
-          var cc = cm[1]!==' '?'con':'coff';
-          out.push('<span class="tx">'+esc(um[1])+'</span><span class="ul">'+esc(um[2])+'</span><span class="tx"> </span><span class="'+cc+'">['+esc(cm[1])+']</span><span class="tx"> </span>'+inl(esc(cm[2])));
+
+      var ul = raw.match(/^(\s*)([-*+])\s(.*)/);
+      if (ul) {
+        var cb = ul[3].match(/^\[([ xX])\]\s?(.*)/);
+        if (cb) {
+          var cc = cb[1] !== ' ' ? 'con' : 'coff';
+          out.push('<span class="tx">'+esc(ul[1])+'</span><span class="ul">'+esc(ul[2])+'</span><span class="tx"> </span><span class="'+cc+'">['+esc(cb[1])+']</span><span class="tx"> </span>'+inl(esc(cb[2])));
         } else {
-          out.push('<span class="tx">'+esc(um[1])+'</span><span class="ul">'+esc(um[2])+'</span><span class="tx"> </span>'+inl(esc(um[3])));
+          out.push('<span class="tx">'+esc(ul[1])+'</span><span class="ul">'+esc(ul[2])+'</span><span class="tx"> </span>'+inl(esc(ul[3])));
         }
         continue;
       }
-      var om = raw.match(/^(\s*)(\d+[.\)])\s(.*)/);
-      if (om) {
-        out.push('<span class="tx">'+esc(om[1])+'</span><span class="ol">'+esc(om[2])+'</span><span class="tx"> </span>'+inl(esc(om[3])));
+
+      var ol = raw.match(/^(\s*)(\d+[.\)])\s(.*)/);
+      if (ol) {
+        out.push('<span class="tx">'+esc(ol[1])+'</span><span class="ol">'+esc(ol[2])+'</span><span class="tx"> </span>'+inl(esc(ol[3])));
         continue;
       }
-      // Plain text — must have explicit colour so it shows through the transparent textarea
-      out.push('<span class="tx">'+inl(escaped)+'</span>');
+
+      out.push('<span class="tx">'+inl(x)+'</span>');
     }
     return out.join('\n');
   }
 
   function render() { hl.innerHTML = highlight(input.value) + '\n'; }
   function syncScroll() { backdrop.scrollTop = input.scrollTop; backdrop.scrollLeft = input.scrollLeft; }
-
   input.addEventListener('scroll', syncScroll);
 
-  // Smart Enter
-  input.addEventListener('keydown', function(ev) {
+  // ── Smart Enter ─────────────────────────────────────────────
+  input.addEventListener('keydown', function (ev) {
     if (ev.key === 'Tab') {
       ev.preventDefault();
-      var s=input.selectionStart;
-      input.value=input.value.substring(0,s)+'  '+input.value.substring(input.selectionEnd);
-      input.selectionStart=input.selectionEnd=s+2;
-      render(); save(); return;
+      var s = input.selectionStart;
+      input.value = input.value.slice(0,s) + '  ' + input.value.slice(input.selectionEnd);
+      input.selectionStart = input.selectionEnd = s + 2;
+      render(); scheduleSave(); return;
     }
     if (ev.key !== 'Enter') return;
-    var start = input.selectionStart;
-    var val = input.value;
-    var ls = val.lastIndexOf('\n', start-1)+1;
-    var line = val.substring(ls, start);
-    var ins = null;
+    var s = input.selectionStart, v = input.value;
+    var ls = v.lastIndexOf('\n', s-1)+1, line = v.slice(ls, s), ins = null;
 
     var cbm = line.match(/^(\s*)([-*+])\s\[[ xX]\]\s/);
     if (cbm) {
-      if (line.replace(/^(\s*)([-*+])\s\[[ xX]\]\s/,'').trim()==='') {
-        ev.preventDefault();
-        input.value=val.substring(0,ls)+'\n'+val.substring(start);
-        input.selectionStart=input.selectionEnd=ls+1;
-        render(); save(); return;
-      }
-      ins=cbm[1]+cbm[2]+' [ ] ';
+      if (!line.replace(/^(\s*)([-*+])\s\[[ xX]\]\s/,'').trim()) { ev.preventDefault(); input.value=v.slice(0,ls)+'\n'+v.slice(s); input.selectionStart=input.selectionEnd=ls+1; render(); scheduleSave(); return; }
+      ins = cbm[1]+cbm[2]+' [ ] ';
     }
-    if (!ins) {
-      var ulm = line.match(/^(\s*)([-*+])\s/);
-      if (ulm) {
-        if (line.replace(/^(\s*)([-*+])\s/,'').trim()==='') {
-          ev.preventDefault();
-          input.value=val.substring(0,ls)+'\n'+val.substring(start);
-          input.selectionStart=input.selectionEnd=ls+1;
-          render(); save(); return;
-        }
-        ins=ulm[1]+ulm[2]+' ';
-      }
-    }
-    if (!ins) {
-      var olm = line.match(/^(\s*)(\d+)([.\)])\s/);
-      if (olm) {
-        if (line.replace(/^(\s*)(\d+)([.\)])\s/,'').trim()==='') {
-          ev.preventDefault();
-          input.value=val.substring(0,ls)+'\n'+val.substring(start);
-          input.selectionStart=input.selectionEnd=ls+1;
-          render(); save(); return;
-        }
-        ins=olm[1]+(parseInt(olm[2],10)+1)+olm[3]+' ';
-      }
-    }
-    if (!ins) {
-      var bqm2 = line.match(/^(\s*>+\s?)/);
-      if (bqm2) {
-        if (line.substring(bqm2[0].length).trim()==='') {
-          ev.preventDefault();
-          input.value=val.substring(0,ls)+'\n'+val.substring(start);
-          input.selectionStart=input.selectionEnd=ls+1;
-          render(); save(); return;
-        }
-        ins=bqm2[1];
-      }
-    }
-    if (ins) {
-      ev.preventDefault();
-      input.value=val.substring(0,start)+'\n'+ins+val.substring(input.selectionEnd);
-      input.selectionStart=input.selectionEnd=start+1+ins.length;
-      render(); save();
-    }
+    if (!ins) { var ulm=line.match(/^(\s*)([-*+])\s/); if(ulm){ if(!line.slice(ulm[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=ulm[1]+ulm[2]+' '; } }
+    if (!ins) { var olm=line.match(/^(\s*)(\d+)([.\)])\s/); if(olm){ if(!line.slice(olm[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=olm[1]+(+olm[2]+1)+olm[3]+' '; } }
+    if (!ins) { var bqm=line.match(/^(\s*>+\s?)/); if(bqm){ if(!line.slice(bqm[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=bqm[1]; } }
+    if (ins) { ev.preventDefault(); input.value=v.slice(0,s)+'\n'+ins+v.slice(input.selectionEnd); input.selectionStart=input.selectionEnd=s+1+ins.length; render(); scheduleSave(); }
   });
 
   render();
 })();
 </script>
-
 </body>
 </html>
