@@ -128,8 +128,17 @@
       // isMetadataUpdate = just a tag/lock change, NOT a new note — skip it
       if (item.isMetadataUpdate) return;
 
-      // Store the full item — we'll mutate content.text on save
-      currentItem = JSON.parse(JSON.stringify(item));
+      // SN may deliver content as a JSON string — parse it if so
+      var content = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+
+      // Only store the fields SN needs back on save — sending extra
+      // internal fields (encryption keys, dirty flags, etc.) can cause
+      // SN to silently reject the save
+      currentItem = {
+        uuid: item.uuid,
+        content_type: item.content_type,
+        content: JSON.parse(JSON.stringify(content))
+      };
 
       // Load text into editor
       var text = currentItem.content.text || '';
@@ -155,12 +164,13 @@
     send('save-items', { items: [currentItem] });
   }
 
-  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 350); }
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 100); }
   function saveNow()       { clearTimeout(saveTimer); doSave(); }
 
   input.addEventListener('input', function () { render(); scheduleSave(); });
   input.addEventListener('blur',  saveNow);
   window.addEventListener('blur', saveNow);
+  window.addEventListener('beforeunload', saveNow);
   document.addEventListener('visibilitychange', function () { if (document.hidden) saveNow(); });
 
   // ── Highlighting ────────────────────────────────────────────
