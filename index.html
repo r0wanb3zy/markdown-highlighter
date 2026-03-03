@@ -156,9 +156,14 @@
   var statusEl = document.getElementById('status');
 
   // ============================================================
-  //  STANDARD NOTES — RAW postMessage PROTOCOL
-  //  No libraries. No CDN. No dependencies.
-  //  Just the bare protocol that SN actually uses.
+  //  STANDARD NOTES — RAW postMessage PROTOCOL (FIXED)
+  //
+  //  The correct handshake order is:
+  //  1. Plugin sends "ready" immediately on load
+  //  2. SN responds with "component-registered" (includes sessionKey)
+  //  3. Plugin sends "stream-context-item" to request the note
+  //  4. SN sends "stream-context-item" back with note data
+  //  5. On save, plugin sends "save-items" with content_type: "Note"
   // ============================================================
 
   var sessionKey = null;
@@ -192,6 +197,12 @@
     }, 2500);
   }
 
+  // ── STEP 1: Send "ready" immediately so SN knows we exist ──
+  // This is the required first message. Without it, SN will not
+  // send component-registered and the whole handshake fails.
+  sendToSN('ready');
+  showStatus('Connecting...');
+
   // ── Listen for ALL messages from Standard Notes ──
   window.addEventListener('message', function(event) {
     var msg;
@@ -202,58 +213,62 @@
     }
     if (!msg || !msg.action) return;
 
-    // ── SN registers our component ──
+    // ── STEP 2: SN registers our component ──
     if (msg.action === 'component-registered') {
       sessionKey = msg.sessionKey;
-      console.log('[MD-HL] ✅ Registered with SN. Session:', sessionKey ? 'yes' : 'no');
+      console.log('[MD-HL] Registered. Session:', sessionKey ? 'yes' : 'no');
       showStatus('Connected ✓');
 
-      // Tell SN we want to receive the current note
+      // STEP 3: Now request the current note
       sendToSN('stream-context-item');
       return;
     }
 
-    // ── SN sends us a note (initial load AND every note switch) ──
+    // ── STEP 4: SN sends note data ──
     if (msg.action === 'stream-context-item') {
-      if (msg.data && msg.data.item) {
-        // Save previous note if switching
-        if (note && note.uuid !== msg.data.item.uuid) {
-          saveNote();
-        }
+      if (!msg.data || !msg.data.item) return;
 
-        note = msg.data.item;
+      var item = msg.data.item;
 
-        var text = '';
-        if (note.content && note.content.text != null) {
-          text = note.content.text;
-        }
+      // FIX: Skip metadata-only updates — these are NOT note switches.
+      // If we don't skip, we may overwrite the user's current edits.
+      if (item.isMetadataUpdate) {
+        console.log('[MD-HL] Skipping metadata-only update');
+        return;
+      }
 
-        console.log('[MD-HL] 📄 Received note:', note.uuid, '| length:', text.length);
-        showStatus('Note loaded ✓');
+      // If switching to a different note, save the current one first
+      if (note && note.uuid !== item.uuid) {
+        immediateSave();
+      }
 
-        // Load into textarea
-        if (text !== input.value) {
-          input.value = text;
-          render();
-        }
+      note = item;
 
-        // Check if locked
-        try {
-          if (note.content.appData['org.standardnotes.sn'].locked) {
-            input.setAttribute('readonly', 'true');
-          } else {
-            input.removeAttribute('readonly');
-          }
-        } catch(e) {
+      var text = (note.content && note.content.text != null) ? note.content.text : '';
+
+      console.log('[MD-HL] Note loaded:', note.uuid, '| length:', text.length);
+      showStatus('Note loaded ✓');
+
+      input.value = text;
+      render();
+
+      // Handle locked state
+      try {
+        if (note.content.appData['org.standardnotes.sn'].locked) {
+          input.setAttribute('readonly', 'true');
+        } else {
           input.removeAttribute('readonly');
         }
+      } catch(e) {
+        input.removeAttribute('readonly');
       }
+
       return;
     }
 
     // ── SN confirms our save ──
     if (msg.action === 'reply') {
-      console.log('[MD-HL] 💾 Save confirmed by SN');
+      console.log('[MD-HL] Save confirmed');
       showStatus('Saved ✓');
       return;
     }
@@ -265,42 +280,49 @@
     }
   });
 
-  // ── Save the note — sends IMMEDIATELY, no delay ──
+  // ── STEP 5: Save the note ──
+  // FIX: Must include content_type: "Note" in the item payload.
+  // Without this, SN receives the message but silently discards
+  // the save because it doesn't know what kind of item it is.
   function saveNote() {
     if (!note) {
-      console.log('[MD-HL] ⚠ Cannot save: no note loaded');
-      showStatus('⚠ No note');
+      console.log('[MD-HL] Cannot save: no note loaded');
+      showStatus('No note loaded');
       return;
     }
     if (!sessionKey) {
-      console.log('[MD-HL] ⚠ Cannot save: no session');
-      showStatus('⚠ No session');
+      console.log('[MD-HL] Cannot save: no session key');
+      showStatus('Not connected');
       return;
     }
 
-    // Update the note content
+    // Update note content
     if (!note.content) note.content = {};
     note.content.text = input.value;
 
-    // Ensure appData structure exists (SN requires this)
+    // Ensure required appData structure exists
     if (!note.content.appData) note.content.appData = {};
     if (!note.content.appData['org.standardnotes.sn']) {
       note.content.appData['org.standardnotes.sn'] = {};
     }
 
-    // Deep clone so we send a clean snapshot
+    // Deep clone for a clean snapshot
     var saveItem = JSON.parse(JSON.stringify(note));
 
-    console.log('[MD-HL] 💾 Saving note:', note.uuid, '| length:', input.value.length);
+    // FIX: content_type MUST be present or SN silently drops the save
+    if (!saveItem.content_type) {
+      saveItem.content_type = 'Note';
+    }
+
+    console.log('[MD-HL] Saving:', note.uuid, '| length:', input.value.length);
     showStatus('Saving...');
 
-    // Send save IMMEDIATELY — no setTimeout, no coalescing
     sendToSN('save-items', {
       items: [saveItem]
     });
   }
 
-  // Debounce for normal typing (300ms)
+  // Debounced save for normal typing
   var saveTimer;
   function queueSave() {
     clearTimeout(saveTimer);
@@ -320,7 +342,6 @@
   document.addEventListener('visibilitychange', function() {
     if (document.hidden) immediateSave();
   });
-  // Also save on any click outside the textarea (catches SN sidebar clicks)
   window.addEventListener('mouseout', function(e) {
     if (!e.relatedTarget && !e.toElement) {
       immediateSave();
