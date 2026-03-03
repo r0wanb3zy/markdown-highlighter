@@ -5,149 +5,45 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Markdown Syntax Highlighter</title>
 
+<!-- Official Standard Notes ComponentRelay — the same library all working plugins use -->
+<script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@standardnotes/component-relay@2.1.2/dist/dist.js"></script>
+
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  html, body {
-    height: 100%;
-    width: 100%;
-    overflow: hidden;
-    background: #0d1117;
-    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-    font-size: 14px;
-    color: #e6edf3;
-  }
-
+  html, body { height: 100%; width: 100%; overflow: hidden; background: #0d1117; font-family: 'JetBrains Mono','SF Mono','Fira Code','Cascadia Code','Consolas',monospace; font-size: 14px; color: #e6edf3; }
   #editor { width: 100%; height: 100%; position: relative; }
-
-  #backdrop {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    overflow: auto; pointer-events: none; z-index: 1;
-  }
-
-  #highlight-layer {
-    padding: 24px 28px;
-    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-    font-size: 14px; line-height: 1.75;
-    white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;
-    letter-spacing: 0px; tab-size: 2; -moz-tab-size: 2;
-    min-height: 100%;
-  }
-
-  #input {
-    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    padding: 24px 28px; background: transparent; color: transparent;
-    caret-color: #58a6ff; border: none; outline: none; resize: none;
-    font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-    font-size: 14px; line-height: 1.75; z-index: 2;
-    white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word;
-    letter-spacing: 0px; tab-size: 2; -moz-tab-size: 2;
-    -webkit-text-fill-color: transparent; overflow: auto;
-  }
-
-  #input::selection { background: rgba(56, 139, 253, 0.3); }
-  #input::-moz-selection { background: rgba(56, 139, 253, 0.3); }
-
-  #status {
-    position: fixed; bottom: 6px; right: 10px;
-    font-size: 11px; color: #484f58; z-index: 100;
-    pointer-events: none; transition: opacity 0.5s;
-    font-family: -apple-system, sans-serif;
-  }
-
-  .h1 { color: #ff7b72; font-weight: 700; }
-  .h2 { color: #ffa657; font-weight: 700; }
-  .h3 { color: #e3b341; font-weight: 600; }
-  .h4 { color: #7ee787; font-weight: 600; }
-  .h5 { color: #79c0ff; font-weight: 600; }
-  .h6 { color: #d2a8ff; font-weight: 600; }
-  .hm { opacity: 0.35; }
-  .b  { color: #ffa657; font-weight: 700; }
-  .bm { color: #ffa657; opacity: 0.35; }
-  .i  { color: #d2a8ff; font-style: italic; }
-  .im { color: #d2a8ff; opacity: 0.35; }
-  .bi { color: #f0883e; font-weight: 700; font-style: italic; }
-  .bim{ color: #f0883e; opacity: 0.35; }
-  .s  { color: #6e7681; text-decoration: line-through; }
-  .sm { color: #6e7681; opacity: 0.35; }
-  .sup { color: #79c0ff; }
-  .supm { color: #79c0ff; opacity: 0.35; }
-  .sub { color: #79c0ff; }
-  .subm { color: #79c0ff; opacity: 0.35; }
-  .u  { color: #e6edf3; text-decoration: underline; text-underline-offset: 3px; }
-  .ut { color: #7ee787; opacity: 0.35; }
-  .c  { color: #79c0ff; background: rgba(110,118,129,0.15); border-radius: 3px; }
-  .cm { color: #79c0ff; opacity: 0.3; }
-  .cf { color: #7ee787; opacity: 0.4; }
-  .cb { color: #8b949e; }
-  .lb { color: #58a6ff; opacity: 0.35; }
-  .lt { color: #58a6ff; text-decoration: underline; text-underline-offset: 2px; }
-  .lu { color: #6e7681; }
-  .ib { color: #d2a8ff; opacity: 0.4; }
-  .bqm{ color: #484f58; }
-  .bq { color: #8b949e; }
-  .ul { color: #ff7b72; font-weight: 700; }
-  .ol { color: #ffa657; font-weight: 700; }
-  .con{ color: #7ee787; font-weight: 700; }
-  .coff{color: #484f58; font-weight: 700; }
-  .hr { color: #30363d; font-weight: 700; }
-
-  #input::-webkit-scrollbar, #backdrop::-webkit-scrollbar { width: 6px; }
-  #input::-webkit-scrollbar-track, #backdrop::-webkit-scrollbar-track { background: transparent; }
-  #input::-webkit-scrollbar-thumb, #backdrop::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
-
-  body.light { background: #ffffff; color: #1f2328; }
-  body.light #input { caret-color: #0969da; }
-  body.light #input::selection { background: rgba(9,105,218,0.2); }
-  body.light #status { color: #afb8c1; }
-  body.light .h1 { color: #cf222e; }
-  body.light .h2 { color: #bc4c00; }
-  body.light .h3 { color: #9a6700; }
-  body.light .h4 { color: #116329; }
-  body.light .h5 { color: #0550ae; }
-  body.light .h6 { color: #8250df; }
-  body.light .b  { color: #bc4c00; }
-  body.light .bm { color: #bc4c00; }
-  body.light .i  { color: #8250df; }
-  body.light .im { color: #8250df; }
-  body.light .bi { color: #bc4c00; }
-  body.light .bim{ color: #bc4c00; }
-  body.light .s  { color: #8b949e; }
-  body.light .sm { color: #8b949e; }
-  body.light .sup { color: #0550ae; }
-  body.light .supm{ color: #0550ae; }
-  body.light .sub { color: #0550ae; }
-  body.light .subm{ color: #0550ae; }
-  body.light .u  { color: #1f2328; }
-  body.light .ut { color: #116329; }
-  body.light .c  { color: #0550ae; background: rgba(9,105,218,0.08); }
-  body.light .cm { color: #0550ae; }
-  body.light .cf { color: #116329; }
-  body.light .cb { color: #1f2328; }
-  body.light .lb { color: #0969da; }
-  body.light .lt { color: #0969da; }
-  body.light .lu { color: #8b949e; }
-  body.light .ib { color: #8250df; }
-  body.light .bqm{ color: #d0d7de; }
-  body.light .bq { color: #656d76; }
-  body.light .ul { color: #cf222e; }
-  body.light .ol { color: #bc4c00; }
-  body.light .con{ color: #116329; }
-  body.light .coff{color: #8b949e; }
-  body.light .hr { color: #d0d7de; }
+  #backdrop { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: auto; pointer-events: none; z-index: 1; }
+  #highlight-layer { padding: 24px 28px; font-family: 'JetBrains Mono','SF Mono','Fira Code','Cascadia Code','Consolas',monospace; font-size: 14px; line-height: 1.75; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; letter-spacing: 0px; tab-size: 2; -moz-tab-size: 2; min-height: 100%; }
+  #input { position: absolute; top: 0; left: 0; width: 100%; height: 100%; padding: 24px 28px; background: transparent; color: transparent; caret-color: #58a6ff; border: none; outline: none; resize: none; font-family: 'JetBrains Mono','SF Mono','Fira Code','Cascadia Code','Consolas',monospace; font-size: 14px; line-height: 1.75; z-index: 2; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: break-word; letter-spacing: 0px; tab-size: 2; -moz-tab-size: 2; -webkit-text-fill-color: transparent; overflow: auto; }
+  #input::selection { background: rgba(56,139,253,0.3); }
+  #input::-moz-selection { background: rgba(56,139,253,0.3); }
+  #status { position: fixed; bottom: 6px; right: 10px; font-size: 11px; color: #484f58; z-index: 100; pointer-events: none; transition: opacity 0.5s; font-family: -apple-system,sans-serif; }
+  .h1{color:#ff7b72;font-weight:700} .h2{color:#ffa657;font-weight:700} .h3{color:#e3b341;font-weight:600} .h4{color:#7ee787;font-weight:600} .h5{color:#79c0ff;font-weight:600} .h6{color:#d2a8ff;font-weight:600} .hm{opacity:.35}
+  .b{color:#ffa657;font-weight:700} .bm{color:#ffa657;opacity:.35} .i{color:#d2a8ff;font-style:italic} .im{color:#d2a8ff;opacity:.35} .bi{color:#f0883e;font-weight:700;font-style:italic} .bim{color:#f0883e;opacity:.35}
+  .s{color:#6e7681;text-decoration:line-through} .sm{color:#6e7681;opacity:.35} .sup{color:#79c0ff} .supm{color:#79c0ff;opacity:.35} .sub{color:#79c0ff} .subm{color:#79c0ff;opacity:.35}
+  .u{color:#e6edf3;text-decoration:underline;text-underline-offset:3px} .ut{color:#7ee787;opacity:.35}
+  .c{color:#79c0ff;background:rgba(110,118,129,.15);border-radius:3px} .cm{color:#79c0ff;opacity:.3} .cf{color:#7ee787;opacity:.4} .cb{color:#8b949e}
+  .lb{color:#58a6ff;opacity:.35} .lt{color:#58a6ff;text-decoration:underline;text-underline-offset:2px} .lu{color:#6e7681} .ib{color:#d2a8ff;opacity:.4}
+  .bqm{color:#484f58} .bq{color:#8b949e} .ul{color:#ff7b72;font-weight:700} .ol{color:#ffa657;font-weight:700} .con{color:#7ee787;font-weight:700} .coff{color:#484f58;font-weight:700} .hr{color:#30363d;font-weight:700}
+  #input::-webkit-scrollbar,#backdrop::-webkit-scrollbar{width:6px} #input::-webkit-scrollbar-track,#backdrop::-webkit-scrollbar-track{background:transparent} #input::-webkit-scrollbar-thumb,#backdrop::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+  body.light{background:#fff;color:#1f2328} body.light #input{caret-color:#0969da} body.light #input::selection{background:rgba(9,105,218,.2)} body.light #status{color:#afb8c1}
+  body.light .h1{color:#cf222e} body.light .h2{color:#bc4c00} body.light .h3{color:#9a6700} body.light .h4{color:#116329} body.light .h5{color:#0550ae} body.light .h6{color:#8250df}
+  body.light .b{color:#bc4c00} body.light .bm{color:#bc4c00} body.light .i{color:#8250df} body.light .im{color:#8250df} body.light .bi{color:#bc4c00} body.light .bim{color:#bc4c00}
+  body.light .s{color:#8b949e} body.light .sm{color:#8b949e} body.light .sup{color:#0550ae} body.light .supm{color:#0550ae} body.light .sub{color:#0550ae} body.light .subm{color:#0550ae}
+  body.light .u{color:#1f2328} body.light .ut{color:#116329} body.light .c{color:#0550ae;background:rgba(9,105,218,.08)} body.light .cm{color:#0550ae} body.light .cf{color:#116329} body.light .cb{color:#1f2328}
+  body.light .lb{color:#0969da} body.light .lt{color:#0969da} body.light .lu{color:#8b949e} body.light .ib{color:#8250df}
+  body.light .bqm{color:#d0d7de} body.light .bq{color:#656d76} body.light .ul{color:#cf222e} body.light .ol{color:#bc4c00} body.light .con{color:#116329} body.light .coff{color:#8b949e} body.light .hr{color:#d0d7de}
 </style>
-
 </head>
 <body>
-
 <div id="editor">
   <div id="backdrop"><div id="highlight-layer"></div></div>
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
 </div>
-<div id="status">Waiting for Standard Notes...</div>
+<div id="status">Connecting...</div>
 
 <script>
-(function() {
+(function () {
   'use strict';
 
   var input    = document.getElementById('input');
@@ -155,292 +51,115 @@
   var hl       = document.getElementById('highlight-layer');
   var statusEl = document.getElementById('status');
 
-  // ============================================================
-  //  STANDARD NOTES — RAW postMessage PROTOCOL (FIXED)
-  //
-  //  The correct handshake order is:
-  //  1. Plugin sends "ready" immediately on load
-  //  2. SN responds with "component-registered" (includes sessionKey)
-  //  3. Plugin sends "stream-context-item" to request the note
-  //  4. SN sends "stream-context-item" back with note data
-  //  5. On save, plugin sends "save-items" with content_type: "Note"
-  // ============================================================
-
-  var sessionKey = null;
-  var note       = null;
-
-  function uuid() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      var r = Math.random() * 16 | 0;
-      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-    });
-  }
-
-  // Send a message to Standard Notes (parent frame)
-  function sendToSN(action, data) {
-    window.parent.postMessage({
-      action: action,
-      data: data || {},
-      messageId: uuid(),
-      sessionKey: sessionKey,
-      api: 'component'
-    }, '*');
-  }
-
-  // Status display
   function showStatus(msg) {
     statusEl.textContent = msg;
     statusEl.style.opacity = '1';
-    clearTimeout(showStatus.t);
-    showStatus.t = setTimeout(function() {
-      statusEl.style.opacity = '0.4';
-    }, 2500);
+    clearTimeout(showStatus._t);
+    showStatus._t = setTimeout(function () { statusEl.style.opacity = '0.4'; }, 2500);
   }
 
-  // ── STEP 1: Send "ready" immediately so SN knows we exist ──
-  // This is the required first message. Without it, SN will not
-  // send component-registered and the whole handshake fails.
-  sendToSN('ready');
-  showStatus('Connecting...');
+  // ============================================================
+  //  STANDARD NOTES — official ComponentRelay
+  //  This is what every working 3rd-party SN plugin uses.
+  //  It handles handshake, session keys, and save protocol correctly.
+  // ============================================================
 
-  // ── Listen for ALL messages from Standard Notes ──
-  window.addEventListener('message', function(event) {
-    var msg;
-    try {
-      msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-    } catch(e) {
-      return;
-    }
-    if (!msg || !msg.action) return;
-
-    // ── STEP 2: SN registers our component ──
-    if (msg.action === 'component-registered') {
-      sessionKey = msg.sessionKey;
-      console.log('[MD-HL] Registered. Session:', sessionKey ? 'yes' : 'no');
+  var relay = new ComponentRelay({
+    targetWindow: window,
+    onReady: function () {
       showStatus('Connected ✓');
-
-      // STEP 3: Now request the current note
-      sendToSN('stream-context-item');
-      return;
-    }
-
-    // ── STEP 4: SN sends note data ──
-    if (msg.action === 'stream-context-item') {
-      if (!msg.data || !msg.data.item) return;
-
-      var item = msg.data.item;
-
-      // FIX: Skip metadata-only updates — these are NOT note switches.
-      // If we don't skip, we may overwrite the user's current edits.
-      if (item.isMetadataUpdate) {
-        console.log('[MD-HL] Skipping metadata-only update');
-        return;
-      }
-
-      // If switching to a different note, save the current one first
-      if (note && note.uuid !== item.uuid) {
-        immediateSave();
-      }
-
-      note = item;
-
-      var text = (note.content && note.content.text != null) ? note.content.text : '';
-
-      console.log('[MD-HL] Note loaded:', note.uuid, '| length:', text.length);
-      showStatus('Note loaded ✓');
-
-      input.value = text;
-      render();
-
-      // Handle locked state
-      try {
-        if (note.content.appData['org.standardnotes.sn'].locked) {
-          input.setAttribute('readonly', 'true');
-        } else {
-          input.removeAttribute('readonly');
-        }
-      } catch(e) {
-        input.removeAttribute('readonly');
-      }
-
-      return;
-    }
-
-    // ── SN confirms our save ──
-    if (msg.action === 'reply') {
-      console.log('[MD-HL] Save confirmed');
-      showStatus('Saved ✓');
-      return;
-    }
-
-    // ── Theme change ──
-    if (msg.action === 'themes') {
-      setTimeout(detectTheme, 100);
-      return;
     }
   });
 
-  // ── STEP 5: Save the note ──
-  // FIX: Must include content_type: "Note" in the item payload.
-  // Without this, SN receives the message but silently discards
-  // the save because it doesn't know what kind of item it is.
+  // streamContextItem is the correct API — fires on load and note switch
+  relay.streamContextItem(function (item) {
+    if (!item || !item.content) return;
+
+    // Skip metadata-only updates (e.g. locking, pinning) to avoid overwriting edits
+    if (item.isMetadataUpdate) return;
+
+    var text = item.content.text || '';
+    if (input.value !== text) {
+      input.value = text;
+      render();
+    }
+
+    // Respect locked/read-only state
+    try {
+      var locked = item.content.appData['org.standardnotes.sn'].locked;
+      if (locked) { input.setAttribute('readonly', 'true'); }
+      else { input.removeAttribute('readonly'); }
+    } catch (e) {
+      input.removeAttribute('readonly');
+    }
+
+    showStatus('Note loaded ✓');
+  });
+
+  // ── Save via ComponentRelay ──
+  // relay.saveItemWithPresave updates the note object then sends save-items
+  // with all required fields (content_type, sessionKey, appData) automatically.
   function saveNote() {
-    if (!note) {
-      console.log('[MD-HL] Cannot save: no note loaded');
-      showStatus('No note loaded');
-      return;
-    }
-    if (!sessionKey) {
-      console.log('[MD-HL] Cannot save: no session key');
-      showStatus('Not connected');
-      return;
-    }
-
-    // Update note content
-    if (!note.content) note.content = {};
-    note.content.text = input.value;
-
-    // Ensure required appData structure exists
-    if (!note.content.appData) note.content.appData = {};
-    if (!note.content.appData['org.standardnotes.sn']) {
-      note.content.appData['org.standardnotes.sn'] = {};
-    }
-
-    // Deep clone for a clean snapshot
-    var saveItem = JSON.parse(JSON.stringify(note));
-
-    // FIX: content_type MUST be present or SN silently drops the save
-    if (!saveItem.content_type) {
-      saveItem.content_type = 'Note';
-    }
-
-    console.log('[MD-HL] Saving:', note.uuid, '| length:', input.value.length);
-    showStatus('Saving...');
-
-    sendToSN('save-items', {
-      items: [saveItem]
+    relay.saveItemWithPresave(function () {
+      var item = relay.item;
+      if (item && item.content) {
+        item.content.text = input.value;
+      }
     });
+    showStatus('Saved ✓');
   }
 
-  // Debounced save for normal typing
   var saveTimer;
-  function queueSave() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(saveNote, 300);
-  }
+  function queueSave()    { clearTimeout(saveTimer); saveTimer = setTimeout(saveNote, 250); }
+  function immediateSave(){ clearTimeout(saveTimer); saveNote(); }
 
-  // Immediate save — bypasses debounce
-  function immediateSave() {
-    clearTimeout(saveTimer);
-    saveNote();
-  }
-
-  // ── Save triggers ──
   input.addEventListener('blur', immediateSave);
   window.addEventListener('blur', immediateSave);
   window.addEventListener('beforeunload', immediateSave);
-  document.addEventListener('visibilitychange', function() {
-    if (document.hidden) immediateSave();
-  });
-  window.addEventListener('mouseout', function(e) {
-    if (!e.relatedTarget && !e.toElement) {
-      immediateSave();
-    }
-  });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) immediateSave(); });
 
   // ============================================================
   //  HIGHLIGHTING ENGINE
   // ============================================================
-
-  function esc(t) {
-    return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  }
+  function esc(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   function inl(s) {
-    s = s.replace(/!\[([^\]]*)\]\(([^)]*)\)/g, function(_,a,u) {
-      return '<span class="ib">!</span><span class="lb">[</span><span class="lt">'+a+'</span><span class="lb">](</span><span class="lu">'+u+'</span><span class="lb">)</span>';
-    });
-    s = s.replace(/\[([^\]]*)\]\(([^)]*)\)/g, function(_,t,u) {
-      return '<span class="lb">[</span><span class="lt">'+t+'</span><span class="lb">](</span><span class="lu">'+u+'</span><span class="lb">)</span>';
-    });
-    s = s.replace(/`([^`]+)`/g, function(_,c) {
-      return '<span class="cm">`</span><span class="c">'+c+'</span><span class="cm">`</span>';
-    });
-    s = s.replace(/&lt;u&gt;(.+?)&lt;\/u&gt;/g, function(_,t) {
-      return '<span class="ut">&lt;u&gt;</span><span class="u">'+t+'</span><span class="ut">&lt;/u&gt;</span>';
-    });
-    s = s.replace(/~~([^~]+)~~/g, function(_,t) {
-      return '<span class="sm">~~</span><span class="s">'+t+'</span><span class="sm">~~</span>';
-    });
-    s = s.replace(/\^([^\^]+)\^/g, function(_,t) {
-      return '<span class="supm">^</span><span class="sup">'+t+'</span><span class="supm">^</span>';
-    });
-    s = s.replace(/(?<!~)~([^~]+)~(?!~)/g, function(_,t) {
-      return '<span class="subm">~</span><span class="sub">'+t+'</span><span class="subm">~</span>';
-    });
-    s = s.replace(/\*\*\*(.+?)\*\*\*/g, function(_,t) {
-      return '<span class="bim">***</span><span class="bi">'+t+'</span><span class="bim">***</span>';
-    });
-    s = s.replace(/___(.+?)___/g, function(_,t) {
-      return '<span class="bim">___</span><span class="bi">'+t+'</span><span class="bim">___</span>';
-    });
-    s = s.replace(/\*\*(.+?)\*\*/g, function(_,t) {
-      return '<span class="bm">**</span><span class="b">'+t+'</span><span class="bm">**</span>';
-    });
-    s = s.replace(/__(.+?)__/g, function(_,t) {
-      return '<span class="bm">__</span><span class="b">'+t+'</span><span class="bm">__</span>';
-    });
-    s = s.replace(/(?<!\*)\*([^\*]+)\*(?!\*)/g, function(_,t) {
-      return '<span class="im">*</span><span class="i">'+t+'</span><span class="im">*</span>';
-    });
-    s = s.replace(/(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/g, function(_,t) {
-      return '<span class="im">_</span><span class="i">'+t+'</span><span class="im">_</span>';
-    });
+    s = s.replace(/!\[([^\]]*)\]\(([^)]*)\)/g, function(_,a,u){return '<span class="ib">!</span><span class="lb">[</span><span class="lt">'+a+'</span><span class="lb">](</span><span class="lu">'+u+'</span><span class="lb">)</span>';});
+    s = s.replace(/\[([^\]]*)\]\(([^)]*)\)/g,  function(_,t,u){return '<span class="lb">[</span><span class="lt">'+t+'</span><span class="lb">](</span><span class="lu">'+u+'</span><span class="lb">)</span>';});
+    s = s.replace(/`([^`]+)`/g,                function(_,c)  {return '<span class="cm">`</span><span class="c">'+c+'</span><span class="cm">`</span>';});
+    s = s.replace(/&lt;u&gt;(.+?)&lt;\/u&gt;/g,function(_,t)  {return '<span class="ut">&lt;u&gt;</span><span class="u">'+t+'</span><span class="ut">&lt;/u&gt;</span>';});
+    s = s.replace(/~~([^~]+)~~/g,              function(_,t)  {return '<span class="sm">~~</span><span class="s">'+t+'</span><span class="sm">~~</span>';});
+    s = s.replace(/\^([^\^]+)\^/g,             function(_,t)  {return '<span class="supm">^</span><span class="sup">'+t+'</span><span class="supm">^</span>';});
+    s = s.replace(/(?<!~)~([^~]+)~(?!~)/g,     function(_,t)  {return '<span class="subm">~</span><span class="sub">'+t+'</span><span class="subm">~</span>';});
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g,        function(_,t)  {return '<span class="bim">***</span><span class="bi">'+t+'</span><span class="bim">***</span>';});
+    s = s.replace(/___(.+?)___/g,              function(_,t)  {return '<span class="bim">___</span><span class="bi">'+t+'</span><span class="bim">___</span>';});
+    s = s.replace(/\*\*(.+?)\*\*/g,            function(_,t)  {return '<span class="bm">**</span><span class="b">'+t+'</span><span class="bm">**</span>';});
+    s = s.replace(/__(.+?)__/g,                function(_,t)  {return '<span class="bm">__</span><span class="b">'+t+'</span><span class="bm">__</span>';});
+    s = s.replace(/(?<!\*)\*([^\*]+)\*(?!\*)/g,function(_,t)  {return '<span class="im">*</span><span class="i">'+t+'</span><span class="im">*</span>';});
+    s = s.replace(/(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/g,function(_,t){return '<span class="im">_</span><span class="i">'+t+'</span><span class="im">_</span>';});
     return s;
   }
 
   function highlight(text) {
-    var lines = text.split('\n');
-    var out = [];
-    var inCode = false;
+    var lines = text.split('\n'), out = [], inCode = false;
     for (var i = 0; i < lines.length; i++) {
-      var raw = lines[i];
-      var escaped = esc(raw);
-      if (/^(`{3,}|~{3,})/.test(raw)) {
-        inCode = !inCode;
-        out.push('<span class="cf">'+escaped+'</span>');
-        continue;
-      }
+      var raw = lines[i], escaped = esc(raw);
+      if (/^(`{3,}|~{3,})/.test(raw)) { inCode = !inCode; out.push('<span class="cf">'+escaped+'</span>'); continue; }
       if (inCode) { out.push('<span class="cb">'+escaped+'</span>'); continue; }
-      if (/^\s{0,3}([-*_])\s*(\1\s*){2,}$/.test(raw)) {
-        out.push('<span class="hr">'+escaped+'</span>'); continue;
-      }
+      if (/^\s{0,3}([-*_])\s*(\1\s*){2,}$/.test(raw)) { out.push('<span class="hr">'+escaped+'</span>'); continue; }
       var hm = raw.match(/^(#{1,6})\s(.*)/);
-      if (hm) {
-        out.push('<span class="h'+hm[1].length+'"><span class="hm">'+esc(hm[1])+'</span> '+inl(esc(hm[2]))+'</span>');
-        continue;
-      }
-      var bm = raw.match(/^(\s{0,3}>+)(.*)/);
-      if (bm) {
-        out.push('<span class="bqm">'+esc(bm[1])+'</span><span class="bq">'+inl(esc(bm[2]))+'</span>');
-        continue;
-      }
+      if (hm) { out.push('<span class="h'+hm[1].length+'"><span class="hm">'+esc(hm[1])+'</span> '+inl(esc(hm[2]))+'</span>'); continue; }
+      var bm2 = raw.match(/^(\s{0,3}>+)(.*)/);
+      if (bm2) { out.push('<span class="bqm">'+esc(bm2[1])+'</span><span class="bq">'+inl(esc(bm2[2]))+'</span>'); continue; }
       var um = raw.match(/^(\s*)([-*+])\s(.*)/);
       if (um) {
-        var cm = um[3].match(/^\[([ xX])\]\s?(.*)/);
-        if (cm) {
-          var cc = cm[1]!==' '?'con':'coff';
-          out.push(esc(um[1])+'<span class="ul">'+esc(um[2])+'</span> <span class="'+cc+'">['+esc(cm[1])+']</span> '+inl(esc(cm[2])));
-        } else {
-          out.push(esc(um[1])+'<span class="ul">'+esc(um[2])+'</span> '+inl(esc(um[3])));
-        }
+        var cm2 = um[3].match(/^\[([ xX])\]\s?(.*)/);
+        if (cm2) { var cc=cm2[1]!==' '?'con':'coff'; out.push(esc(um[1])+'<span class="ul">'+esc(um[2])+'</span> <span class="'+cc+'">['+esc(cm2[1])+']</span> '+inl(esc(cm2[2]))); }
+        else { out.push(esc(um[1])+'<span class="ul">'+esc(um[2])+'</span> '+inl(esc(um[3]))); }
         continue;
       }
       var om = raw.match(/^(\s*)(\d+[.\)])\s(.*)/);
-      if (om) {
-        out.push(esc(om[1])+'<span class="ol">'+esc(om[2])+'</span> '+inl(esc(om[3])));
-        continue;
-      }
+      if (om) { out.push(esc(om[1])+'<span class="ol">'+esc(om[2])+'</span> '+inl(esc(om[3]))); continue; }
       out.push(inl(escaped));
     }
     return out.join('\n');
@@ -452,110 +171,50 @@
   // ============================================================
   //  AUTO-CONTINUE LISTS
   // ============================================================
-
   function handleEnter(ev) {
     if (ev.key !== 'Enter') return;
-    var start = input.selectionStart;
-    var val = input.value;
-    var ls = val.lastIndexOf('\n', start-1)+1;
-    var line = val.substring(ls, start);
-    var ins = null;
-
+    var start = input.selectionStart, val = input.value;
+    var ls = val.lastIndexOf('\n', start-1)+1, line = val.substring(ls, start), ins = null;
     var cbm = line.match(/^(\s*)([-*+])\s\[[ xX]\]\s/);
-    if (cbm) {
-      if (line.replace(/^(\s*)([-*+])\s\[[ xX]\]\s/,'').trim()==='') {
-        ev.preventDefault();
-        input.value=val.substring(0,ls)+'\n'+val.substring(start);
-        input.selectionStart=input.selectionEnd=ls+1;
-        render();queueSave();return;
-      }
-      ins=cbm[1]+cbm[2]+' [ ] ';
-    }
-    if (!ins) {
-      var ulm = line.match(/^(\s*)([-*+])\s/);
-      if (ulm) {
-        if (line.replace(/^(\s*)([-*+])\s/,'').trim()==='') {
-          ev.preventDefault();
-          input.value=val.substring(0,ls)+'\n'+val.substring(start);
-          input.selectionStart=input.selectionEnd=ls+1;
-          render();queueSave();return;
-        }
-        ins=ulm[1]+ulm[2]+' ';
-      }
-    }
-    if (!ins) {
-      var olm = line.match(/^(\s*)(\d+)([.\)])\s/);
-      if (olm) {
-        if (line.replace(/^(\s*)(\d+)([.\)])\s/,'').trim()==='') {
-          ev.preventDefault();
-          input.value=val.substring(0,ls)+'\n'+val.substring(start);
-          input.selectionStart=input.selectionEnd=ls+1;
-          render();queueSave();return;
-        }
-        ins=olm[1]+(parseInt(olm[2],10)+1)+olm[3]+' ';
-      }
-    }
-    if (!ins) {
-      var bqm = line.match(/^(\s*>+\s?)/);
-      if (bqm) {
-        if (line.substring(bqm[0].length).trim()==='') {
-          ev.preventDefault();
-          input.value=val.substring(0,ls)+'\n'+val.substring(start);
-          input.selectionStart=input.selectionEnd=ls+1;
-          render();queueSave();return;
-        }
-        ins=bqm[1];
-      }
-    }
-    if (ins) {
-      ev.preventDefault();
-      input.value=val.substring(0,start)+'\n'+ins+val.substring(input.selectionEnd);
-      input.selectionStart=input.selectionEnd=start+1+ins.length;
-      render();queueSave();
-    }
+    if (cbm) { if (!line.replace(/^(\s*)([-*+])\s\[[ xX]\]\s/,'').trim()){ev.preventDefault();input.value=val.substring(0,ls)+'\n'+val.substring(start);input.selectionStart=input.selectionEnd=ls+1;render();queueSave();return;} ins=cbm[1]+cbm[2]+' [ ] '; }
+    if (!ins) { var ulm=line.match(/^(\s*)([-*+])\s/); if(ulm){if(!line.replace(/^(\s*)([-*+])\s/,'').trim()){ev.preventDefault();input.value=val.substring(0,ls)+'\n'+val.substring(start);input.selectionStart=input.selectionEnd=ls+1;render();queueSave();return;}ins=ulm[1]+ulm[2]+' ';} }
+    if (!ins) { var olm=line.match(/^(\s*)(\d+)([.\)])\s/); if(olm){if(!line.replace(/^(\s*)(\d+)([.\)])\s/,'').trim()){ev.preventDefault();input.value=val.substring(0,ls)+'\n'+val.substring(start);input.selectionStart=input.selectionEnd=ls+1;render();queueSave();return;}ins=olm[1]+(parseInt(olm[2],10)+1)+olm[3]+' ';} }
+    if (!ins) { var bqr=line.match(/^(\s*>+\s?)/); if(bqr){if(!line.substring(bqr[0].length).trim()){ev.preventDefault();input.value=val.substring(0,ls)+'\n'+val.substring(start);input.selectionStart=input.selectionEnd=ls+1;render();queueSave();return;}ins=bqr[1];} }
+    if (ins) { ev.preventDefault(); input.value=val.substring(0,start)+'\n'+ins+val.substring(input.selectionEnd); input.selectionStart=input.selectionEnd=start+1+ins.length; render();queueSave(); }
   }
 
   function handleTab(ev) {
-    if (ev.key!=='Tab') return;
+    if (ev.key !== 'Tab') return;
     ev.preventDefault();
-    var s=input.selectionStart;
-    input.value=input.value.substring(0,s)+'  '+input.value.substring(input.selectionEnd);
-    input.selectionStart=input.selectionEnd=s+2;
-    render();queueSave();
+    var s = input.selectionStart;
+    input.value = input.value.substring(0,s)+'  '+input.value.substring(input.selectionEnd);
+    input.selectionStart = input.selectionEnd = s+2;
+    render(); queueSave();
   }
 
-  // ============================================================
-  //  EVENTS
-  // ============================================================
-
-  input.addEventListener('input', function() {
-    render();
-    queueSave();
-  });
-  input.addEventListener('scroll', syncScroll);
-  input.addEventListener('keydown', function(ev) { handleEnter(ev); handleTab(ev); });
+  input.addEventListener('input',   function () { render(); queueSave(); });
+  input.addEventListener('scroll',  syncScroll);
+  input.addEventListener('keydown', function (ev) { handleEnter(ev); handleTab(ev); });
 
   // ============================================================
-  //  THEME
+  //  THEME DETECTION
   // ============================================================
-
   function detectTheme() {
     var bg = window.getComputedStyle(document.body).backgroundColor;
     if (!bg) return;
     var m = bg.match(/\d+/g);
     if (m && m.length >= 3) {
-      var br = (parseInt(m[0])*299+parseInt(m[1])*587+parseInt(m[2])*114)/1000;
+      var br = (parseInt(m[0])*299 + parseInt(m[1])*587 + parseInt(m[2])*114) / 1000;
       document.body.classList.toggle('light', br > 128);
     }
   }
 
   render();
   detectTheme();
-  new MutationObserver(function(){setTimeout(detectTheme,50);})
-    .observe(document.body,{attributes:true,attributeFilter:['style','class']});
+  new MutationObserver(function () { setTimeout(detectTheme, 50); })
+    .observe(document.body, { attributes: true, attributeFilter: ['style', 'class'] });
 
 })();
 </script>
-
 </body>
 </html>
