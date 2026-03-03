@@ -92,10 +92,12 @@
   var hl      = document.getElementById('highlight-layer');
 
   // ── State ──────────────────────────────────────────────────
-  var sessionKey  = null;
-  var currentItem = null;   // the full item object SN sent us
-  var noteLoaded  = false;  // true only after SN delivers the note
-  var saveTimer   = null;
+  var sessionKey   = null;
+  var registered   = false; // true after component-registered received
+  var currentItem  = null;  // the full item object SN sent us
+  var noteLoaded   = false; // true only after SN delivers the note
+  var saveTimer    = null;
+  var readyTimer   = null;  // retry sending 'ready' until acknowledged
 
   // ── Messaging helpers ───────────────────────────────────────
   function uid() { return Math.random().toString(36).slice(2) + Date.now(); }
@@ -116,6 +118,8 @@
     // Step 2: SN confirms registration → ask for the note
     if (msg.action === 'component-registered') {
       sessionKey = msg.sessionKey || null;
+      registered = true;
+      clearInterval(readyTimer); // stop retrying 'ready'
       send('stream-context-item');
       return;
     }
@@ -125,8 +129,10 @@
       var item = msg.data && msg.data.item;
       if (!item || !item.content) return;
 
-      // isMetadataUpdate = just a tag/lock change, NOT a new note — skip it
-      if (item.isMetadataUpdate) return;
+      // Once the note is loaded, skip pure metadata updates (tags, pin, etc.)
+      // but always accept the FIRST delivery so the note content appears,
+      // even if SN happens to mark it as a metadata update
+      if (item.isMetadataUpdate && noteLoaded) return;
 
       // SN may deliver content as a JSON string — parse it if so
       var content = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
@@ -149,8 +155,14 @@
     }
   });
 
-  // Step 1: tell SN we exist — must be first, no sessionKey yet
+  // Step 1: tell SN we exist — retry every 500 ms until acknowledged,
+  // because the parent frame may not be listening at the exact moment
+  // the iframe loads (race condition seen in practice)
   send('ready');
+  readyTimer = setInterval(function () {
+    if (registered) { clearInterval(readyTimer); return; }
+    send('ready');
+  }, 500);
 
   // ── Save ────────────────────────────────────────────────────
   function doSave() {
