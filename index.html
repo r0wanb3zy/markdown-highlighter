@@ -95,7 +95,7 @@
     color: #484f58;
     z-index: 10;
     pointer-events: none;
-    transition: opacity 0.3s;
+    transition: opacity 0.5s;
   }
 
   .h1 { color: #ff7b72; font-weight: 700; }
@@ -205,7 +205,10 @@
   <div id="backdrop"><div id="highlight-layer"></div></div>
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
 </div>
-<div id="status"></div>
+<div id="status">Connecting...</div>
+
+<!-- Standard Notes Component Library -->
+<script src="https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@0.0.0/dist/index.js"></script>
 
 <script>
 (function () {
@@ -214,72 +217,90 @@
   var input = document.getElementById('input');
   var backdrop = document.getElementById('backdrop');
   var hl = document.getElementById('highlight-layer');
-  var status = document.getElementById('status');
+  var statusEl = document.getElementById('status');
 
-  var note = null;
+  var currentNote = null;
   var lastSaved = '';
   var ignoreChange = false;
-  var pendingSave = false;
+  var connected = false;
 
   // ============================================================
-  // STANDARD NOTES COMMUNICATION (direct postMessage protocol)
-  // Works with both old and new SN versions
+  // STANDARD NOTES COMMUNICATION
+  // Using the raw postMessage protocol that all SN versions support
   // ============================================================
 
-  var snReady = false;
   var sessionKey = null;
-  var componentId = null;
 
-  function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-      var r = Math.random() * 16 | 0;
-      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-    });
+  function genId() {
+    return 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
   }
 
-  function postToSN(action, data) {
+  function sendToSN(action, data, callback) {
+    var msgId = genId();
     var msg = {
       action: action,
       data: data || {},
-      messageId: generateUUID(),
+      messageId: msgId,
       sessionKey: sessionKey,
       api: 'component'
     };
-    if (componentId) {
-      msg.componentId = componentId;
-    }
     window.parent.postMessage(msg, '*');
   }
 
-  function handleSNMessage(event) {
+  function saveNote() {
+    if (!currentNote || !connected) return;
+
+    var text = input.value;
+    if (text === lastSaved) return;
+
+    lastSaved = text;
+
+    // Clone content and update text
+    var content = JSON.parse(JSON.stringify(currentNote.content || {}));
+    content.text = text;
+
+    // Preserve all existing appData, references etc
+    sendToSN('save-items', {
+      items: [{
+        uuid: currentNote.uuid,
+        content_type: currentNote.content_type,
+        content: content
+      }]
+    });
+
+    showStatus('Saving...');
+  }
+
+  // Listen for messages from Standard Notes
+  window.addEventListener('message', function(event) {
     var data;
     try {
       data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-    } catch (e) {
+    } catch(e) {
       return;
     }
-
     if (!data || !data.action) return;
 
-    switch (data.action) {
+    switch(data.action) {
+
       case 'component-registered':
         sessionKey = data.sessionKey;
-        componentId = data.componentData ? data.componentData.uuid : null;
-        snReady = true;
+        connected = true;
         showStatus('Connected');
 
-        // Request current note
-        postToSN('stream-context-item');
+        // Ask SN to stream the current note to us
+        sendToSN('stream-context-item');
         break;
 
       case 'context-item':
-      case 'stream-context-item':
         if (data.data && data.data.item) {
-          note = data.data.item;
+          currentNote = data.data.item;
+
           var text = '';
-          if (note.content && note.content.text != null) {
-            text = note.content.text;
+          if (currentNote.content && currentNote.content.text != null) {
+            text = currentNote.content.text;
           }
+
           if (text !== input.value) {
             ignoreChange = true;
             input.value = text;
@@ -287,77 +308,107 @@
             render();
           }
 
-          // Check locked
-          if (note.content && note.content.appData) {
-            var d = note.content.appData['org.standardnotes.sn'] || {};
-            if (d.locked) input.setAttribute('readonly', 'true');
-            else input.removeAttribute('readonly');
-          }
+          // Check if note is locked
+          try {
+            var appData = currentNote.content.appData || {};
+            var snData = appData['org.standardnotes.sn'] || {};
+            if (snData.locked) {
+              input.setAttribute('readonly', 'true');
+            } else {
+              input.removeAttribute('readonly');
+            }
+          } catch(e) {}
+
+          showStatus('Loaded');
         }
+        break;
+
+      case 'save-items-reply':
+        showStatus('Saved ✓');
         break;
 
       case 'themes':
         setTimeout(detectTheme, 100);
         break;
-
-      case 'save-items-reply':
-      case 'save-success':
-        pendingSave = false;
-        showStatus('Saved');
-        break;
     }
-  }
+  });
 
-  window.addEventListener('message', handleSNMessage);
-
-  function saveToSN() {
-    if (!note) return;
-
-    var text = input.value;
-    if (text === lastSaved) return;
-
-    lastSaved = text;
-    pendingSave = true;
-    showStatus('Saving...');
-
-    // Update the note content
-    if (!note.content) note.content = {};
-    note.content.text = text;
-
-    // Send save message
-    postToSN('save-items', {
-      items: [{
-        uuid: note.uuid,
-        content_type: note.content_type,
-        content: note.content
-      }]
-    });
-  }
-
-  // Also try the ComponentRelay approach as fallback
-  var componentRelay = null;
-
-  function loadRelay() {
-    return new Promise(function (ok) {
-      var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/sn-components-api@1.3.4/dist/dist.js';
-      s.onload = function () { ok(true); };
-      s.onerror = function () { ok(false); };
-      document.head.appendChild(s);
-    });
-  }
+  // Tell SN we exist (triggers component-registered response)
+  // SN will auto-detect this when the iframe loads, but we
+  // also send a ready signal
+  setTimeout(function() {
+    sendToSN('stream-context-item');
+  }, 50);
 
   function showStatus(msg) {
-    status.textContent = msg;
-    status.style.opacity = '1';
-    clearTimeout(showStatus.timer);
-    showStatus.timer = setTimeout(function() {
-      status.style.opacity = '0';
+    statusEl.textContent = msg;
+    statusEl.style.opacity = '1';
+    clearTimeout(showStatus.t);
+    showStatus.t = setTimeout(function() {
+      if (msg === 'Saved ✓' || msg === 'Loaded' || msg === 'Connected') {
+        statusEl.style.opacity = '0.3';
+      }
     }, 2000);
   }
 
   // ============================================================
-  // HIGHLIGHTING
+  // ALSO TRY ComponentRelay for older SN versions
+  // ============================================================
+
+  function tryComponentRelay() {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/sn-components-api@1.3.4/dist/dist.js';
+    s.onload = function() {
+      if (window.ComponentRelay && !connected) {
+        var relay = new ComponentRelay({
+          targetWindow: window,
+          options: {
+            coallesedSaving: true,
+            coallesedSavingDelay: 250
+          }
+        });
+
+        relay.streamContextItem(function(item) {
+          if (connected) return; // direct method already working
+          connected = true;
+          currentNote = item;
+
+          var text = '';
+          if (item.content && item.content.text != null) {
+            text = item.content.text;
+          }
+
+          if (text !== input.value) {
+            ignoreChange = true;
+            input.value = text;
+            lastSaved = text;
+            render();
+          }
+
+          showStatus('Connected (relay)');
+
+          // Override saveNote to use relay
+          saveNote = function() {
+            if (!currentNote) return;
+            var t = input.value;
+            if (t === lastSaved) return;
+            lastSaved = t;
+            relay.saveItemWithPresave(currentNote, function() {
+              currentNote.content.text = t;
+            });
+            showStatus('Saved ✓');
+          };
+        });
+      }
+    };
+    s.onerror = function() {};
+    document.head.appendChild(s);
+  }
+
+  tryComponentRelay();
+
+  // ============================================================
+  // HIGHLIGHTING ENGINE
   // ============================================================
 
   function esc(t) {
@@ -369,54 +420,67 @@
   }
 
   function inl(s) {
+    // images
     s = s.replace(/!\[([^\]]*)\]\(([^)]*)\)/g, function(_, alt, url) {
       return '<span class="ib">!</span><span class="lb">[</span><span class="lt">' + alt + '</span><span class="lb">](</span><span class="lu">' + url + '</span><span class="lb">)</span>';
     });
 
+    // links
     s = s.replace(/\[([^\]]*)\]\(([^)]*)\)/g, function(_, txt, url) {
       return '<span class="lb">[</span><span class="lt">' + txt + '</span><span class="lb">](</span><span class="lu">' + url + '</span><span class="lb">)</span>';
     });
 
+    // inline code
     s = s.replace(/`([^`]+)`/g, function(_, code) {
       return '<span class="cm">`</span><span class="c">' + code + '</span><span class="cm">`</span>';
     });
 
+    // underline <u>text</u>
     s = s.replace(/&lt;u&gt;(.+?)&lt;\/u&gt;/g, function(_, txt) {
       return '<span class="ut">&lt;u&gt;</span><span class="u">' + txt + '</span><span class="ut">&lt;/u&gt;</span>';
     });
 
+    // strikethrough
     s = s.replace(/~~([^~]+)~~/g, function(_, txt) {
       return '<span class="sm">~~</span><span class="s">' + txt + '</span><span class="sm">~~</span>';
     });
 
+    // superscript
     s = s.replace(/\^([^\^]+)\^/g, function(_, txt) {
       return '<span class="supm">^</span><span class="sup">' + txt + '</span><span class="supm">^</span>';
     });
 
+    // subscript (single ~, not ~~)
     s = s.replace(/(?<!~)~([^~]+)~(?!~)/g, function(_, txt) {
       return '<span class="subm">~</span><span class="sub">' + txt + '</span><span class="subm">~</span>';
     });
 
+    // bold italic ***
     s = s.replace(/\*\*\*(.+?)\*\*\*/g, function(_, txt) {
       return '<span class="bim">***</span><span class="bi">' + txt + '</span><span class="bim">***</span>';
     });
 
+    // bold italic ___
     s = s.replace(/___(.+?)___/g, function(_, txt) {
       return '<span class="bim">___</span><span class="bi">' + txt + '</span><span class="bim">___</span>';
     });
 
+    // bold **
     s = s.replace(/\*\*(.+?)\*\*/g, function(_, txt) {
       return '<span class="bm">**</span><span class="b">' + txt + '</span><span class="bm">**</span>';
     });
 
+    // bold __
     s = s.replace(/__(.+?)__/g, function(_, txt) {
       return '<span class="bm">__</span><span class="b">' + txt + '</span><span class="bm">__</span>';
     });
 
+    // italic *
     s = s.replace(/(?<!\*)\*([^\*]+)\*(?!\*)/g, function(_, txt) {
       return '<span class="im">*</span><span class="i">' + txt + '</span><span class="im">*</span>';
     });
 
+    // italic _
     s = s.replace(/(?<![a-zA-Z0-9])_([^_]+)_(?![a-zA-Z0-9])/g, function(_, txt) {
       return '<span class="im">_</span><span class="i">' + txt + '</span><span class="im">_</span>';
     });
@@ -495,41 +559,21 @@
   }
 
   // ============================================================
-  // SAVING — uses both methods for compatibility
+  // SAVE TRIGGERS
   // ============================================================
 
-  function save() {
-    var t = input.value;
-    if (t === lastSaved) return;
-
-    // Method 1: Direct postMessage
-    if (snReady && note) {
-      saveToSN();
-    }
-
-    // Method 2: ComponentRelay fallback
-    if (componentRelay && note) {
-      lastSaved = t;
-      componentRelay.saveItemWithPresave(note, function () {
-        note.content.text = t;
-      });
-      showStatus('Saved');
-    }
-  }
-
-  var st;
+  var saveTimer;
   function queueSave() {
-    clearTimeout(st);
-    st = setTimeout(save, 300);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveNote, 300);
   }
 
-  // Also save immediately when user might leave
   function immediateSave() {
-    clearTimeout(st);
-    save();
+    clearTimeout(saveTimer);
+    saveNote();
   }
 
-  // Save before switching notes or closing
+  // Save when switching away
   window.addEventListener('beforeunload', immediateSave);
   window.addEventListener('blur', immediateSave);
   document.addEventListener('visibilitychange', function() {
@@ -615,12 +659,20 @@
     render(); queueSave();
   }
 
+  // ============================================================
+  // EVENT LISTENERS
+  // ============================================================
+
   input.addEventListener('input', function () {
     if (ignoreChange) { ignoreChange = false; return; }
-    render(); queueSave();
+    render();
+    queueSave();
   });
   input.addEventListener('scroll', syncScroll);
-  input.addEventListener('keydown', function (ev) { handleEnter(ev); handleTab(ev); });
+  input.addEventListener('keydown', function (ev) {
+    handleEnter(ev);
+    handleTab(ev);
+  });
 
   // ============================================================
   // THEME
@@ -640,47 +692,11 @@
   // INIT
   // ============================================================
 
-  async function init() {
-    // Try ComponentRelay as well for maximum compatibility
-    var ok = await loadRelay();
-    if (ok && window.ComponentRelay) {
-      componentRelay = new ComponentRelay({
-        targetWindow: window,
-        options: {
-          coallesedSaving: true,
-          coallesedSavingDelay: 250
-        }
-      });
-      componentRelay.streamContextItem(function (item) {
-        // Only use this if direct postMessage hasn't already loaded the note
-        if (!snReady) {
-          note = item;
-          if (note && note.content && note.content.text != null) {
-            if (note.content.text !== input.value) {
-              ignoreChange = true;
-              input.value = note.content.text;
-              lastSaved = note.content.text;
-              render();
-            }
-          }
-          if (note && note.content && note.content.appData) {
-            var d = note.content.appData['org.standardnotes.sn'] || {};
-            if (d.locked) input.setAttribute('readonly', 'true');
-            else input.removeAttribute('readonly');
-          }
-          showStatus('Connected (relay)');
-        }
-      });
-      componentRelay.onThemesChange(function () { setTimeout(detectTheme, 100); });
-    }
+  render();
+  detectTheme();
+  new MutationObserver(function () { setTimeout(detectTheme, 50); })
+    .observe(document.body, { attributes: true, attributeFilter: ['style', 'class'] });
 
-    render();
-    detectTheme();
-    new MutationObserver(function () { setTimeout(detectTheme, 50); })
-      .observe(document.body, { attributes: true, attributeFilter: ['style','class'] });
-  }
-
-  init();
 })();
 </script>
 
