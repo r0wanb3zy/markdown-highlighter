@@ -163,7 +163,6 @@
 
   var sessionKey = null;
   var note       = null;
-  var ignoreNext = false;
 
   function uuid() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -217,6 +216,11 @@
     // ── SN sends us a note (initial load AND every note switch) ──
     if (msg.action === 'stream-context-item') {
       if (msg.data && msg.data.item) {
+        // Save previous note if switching
+        if (note && note.uuid !== msg.data.item.uuid) {
+          saveNote();
+        }
+
         note = msg.data.item;
 
         var text = '';
@@ -229,7 +233,6 @@
 
         // Load into textarea
         if (text !== input.value) {
-          ignoreNext = true;
           input.value = text;
           render();
         }
@@ -505,7 +508,6 @@
   // ============================================================
 
   input.addEventListener('input', function() {
-    if (ignoreNext) { ignoreNext = false; return; }
     render();
     queueSave();
   });
