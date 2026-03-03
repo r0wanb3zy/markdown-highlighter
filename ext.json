@@ -1,0 +1,12 @@
+{
+  "identifier": "com.yourusername.markdown-highlighter",
+  "name": "Markdown Syntax Highlighter",
+  "content_type": "SN|Component",
+  "area": "editor-editor",
+  "version": "1.0.0",
+  "description": "Highlights raw Markdown syntax for easier reading.",
+  "url": "https://yourusername.github.io/markdown-highlighter/index.html",
+  "latest_url": "https://yourusername.github.io/markdown-highlighter/ext.json",
+  "marketing_url": "",
+  "thumbnail_url": ""
+}
