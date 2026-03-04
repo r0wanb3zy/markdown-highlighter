@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "WebFetch(domain:github.com)",
-      "WebFetch(domain:nienow.github.io)",
-      "WebFetch(domain:cdn.jsdelivr.net)"
-    ]
-  }
-}
