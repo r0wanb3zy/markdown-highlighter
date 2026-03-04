@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Markdown Syntax Highlighter</title>
 
-<!-- Modern Standard Notes bridge (ComponentRelay) – handles load/save/sync reliably -->
-<script src="https://unpkg.com/@standardnotes/component-relay@latest/dist/component-relay.min.js"></script>
+<!-- Working CDN for ComponentRelay (use dist/dist.js from v2.1.2) -->
+<script src="https://unpkg.com/@standardnotes/component-relay@2.1.2/dist/dist.js"></script>
 
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -127,7 +127,7 @@
         });
         currentText = newText;
       }
-    }, 300); // 300ms debounce – feels responsive but avoids spam
+    }, 300); // 300ms debounce
   }
 
   // Hook save to events
@@ -137,7 +137,7 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 
   // ================================================================
-  // HIGHLIGHTING (your original code, unchanged except Tab indent fix)
+  // HIGHLIGHTING (original, unchanged)
   // ================================================================
   function esc(t) {
     return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -217,7 +217,6 @@
         out.push('<span class="tx">'+esc(om[1])+'</span><span class="ol">'+esc(om[2])+'</span><span class="tx"> </span>'+inl(esc(om[3])));
         continue;
       }
-      // Plain text
       out.push('<span class="tx">'+inl(escaped)+'</span>');
     }
     return out.join('\n');
@@ -231,7 +230,7 @@
   }
   input.addEventListener('scroll', syncScroll);
 
-  // Smart Tab (4 spaces) and Enter (list/quote continuation)
+  // Smart Tab (4 spaces) and Enter
   input.addEventListener('keydown', function(ev) {
     if (ev.key === 'Tab') {
       ev.preventDefault();
@@ -303,7 +302,6 @@
     }
   });
 
-  // Initial render
   render();
 })();
 </script>
