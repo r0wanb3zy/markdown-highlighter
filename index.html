@@ -40,75 +40,6 @@
 
   #input::selection { background: rgba(56, 139, 253, 0.3); }
 
-  /* ── Save status indicator ─────────────────────────────────── */
-  #save-status {
-    position: fixed;
-    bottom: 14px;
-    right: 16px;
-    z-index: 100;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px 5px 8px;
-    border-radius: 20px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-size: 11.5px;
-    font-weight: 500;
-    letter-spacing: 0.01em;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.25s ease, background 0.25s ease, color 0.25s ease;
-    user-select: none;
-  }
-
-  #save-status.saving {
-    opacity: 1;
-    background: rgba(30, 38, 50, 0.92);
-    color: #8b949e;
-    border: 1px solid rgba(255,255,255,0.07);
-    backdrop-filter: blur(6px);
-  }
-
-  #save-status.saved {
-    opacity: 1;
-    background: rgba(22, 38, 28, 0.92);
-    color: #3fb950;
-    border: 1px solid rgba(63, 185, 80, 0.2);
-    backdrop-filter: blur(6px);
-  }
-
-  #save-status.hidden {
-    opacity: 0;
-  }
-
-  /* Spinner */
-  .spinner {
-    width: 11px;
-    height: 11px;
-    border: 1.5px solid rgba(139, 148, 158, 0.25);
-    border-top-color: #8b949e;
-    border-radius: 50%;
-    animation: spin 0.65s linear infinite;
-    flex-shrink: 0;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  /* Checkmark */
-  .check-icon {
-    width: 11px;
-    height: 11px;
-    flex-shrink: 0;
-    display: none;
-  }
-
-  #save-status.saved .check-icon { display: block; }
-  #save-status.saved .spinner    { display: none; }
-  #save-status.saving .check-icon { display: none; }
-  #save-status.saving .spinner    { display: block; }
-
   /* Syntax colours */
   .tx  { color: #e6edf3; }
   .h1  { color: #ff7b72; font-weight: 700; }
@@ -145,6 +76,15 @@
   #input::-webkit-scrollbar, #backdrop::-webkit-scrollbar { width: 6px; }
   #input::-webkit-scrollbar-track, #backdrop::-webkit-scrollbar-track { background: transparent; }
   #input::-webkit-scrollbar-thumb, #backdrop::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+  /* Debug status bar — remove once saving is confirmed working */
+  #status {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
+    background: #161b22; border-top: 1px solid #30363d;
+    color: #8b949e; font-size: 11px; padding: 3px 10px;
+    font-family: monospace;
+  }
+  #status:empty { display: none; }
 </style>
 </head>
 <body>
@@ -152,16 +92,7 @@
   <div id="backdrop"><div id="highlight-layer"></div></div>
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
 </div>
-
-<!-- Save status pill -->
-<div id="save-status" class="hidden">
-  <svg class="check-icon" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 6.5L4.5 9L10 3.5" stroke="#3fb950" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-  </svg>
-  <div class="spinner"></div>
-  <span id="save-label">Saving…</span>
-</div>
-
+<div id="status">connecting...</div>
 <script>
 (function () {
   'use strict';
@@ -169,126 +100,134 @@
   var input    = document.getElementById('input');
   var backdrop = document.getElementById('backdrop');
   var hl       = document.getElementById('highlight-layer');
-  var statusEl = document.getElementById('save-status');
-  var labelEl  = document.getElementById('save-label');
+  var statusEl = document.getElementById('status');
 
-  // ── State ──────────────────────────────────────────────────
-  var sessionKey  = null;
-  var registered  = false;
-  var currentItem = null;
-  var noteLoaded  = false;
-  var saveTimer   = null;
-  var readyTimer  = null;
+  function setStatus(m) { if (statusEl) statusEl.textContent = m; }
 
-  // Save-status timers
-  var savedTimer   = null;  // auto-hide after showing "Saved"
-  var hideTimer    = null;  // fade-out delay
+  // ── Protocol state ───────────────────────────────────────────
+  // Modelled on the sn-extension-api library used by working SN editors.
+  //
+  // Key insight: SN responds to stream-context-item by sending a REPLY
+  // matched by original.messageId — NOT a new stream-context-item action.
+  // Earlier versions of this plugin only listened for action===stream-context-item
+  // and therefore never received the note.
 
-  // ── Save status UI ──────────────────────────────────────────
-  function showSaving() {
-    clearTimeout(savedTimer);
-    clearTimeout(hideTimer);
-    statusEl.className = 'saving';
-    labelEl.textContent = 'Saving\u2026';
+  var sessionKey   = null;
+  var currentItem  = null;
+  var noteLoaded   = false;
+  var saveTimer    = null;
+  var statusTimer  = null;
+  var pendingQueue = [];  // messages queued before sessionKey is known
+  var sentMessages = [];  // sent messages with response callbacks
+
+  function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
   }
 
-  function showSaved() {
-    statusEl.className = 'saved';
-    labelEl.textContent = 'Saved';
-    // Hold "Saved" for 1.8 s then fade out
-    savedTimer = setTimeout(function () {
-      statusEl.className = 'hidden';
-    }, 1800);
-  }
-
-  // ── Messaging helpers ───────────────────────────────────────
-  function uid() { return Math.random().toString(36).slice(2) + Date.now(); }
-
-  function send(action, data) {
-    var msg = { action: action, data: data || {}, messageId: uid(), api: 'component' };
-    if (sessionKey) msg.sessionKey = sessionKey;
+  // Post a message to Standard Notes.
+  // Queue it if we don't have a sessionKey yet; flush when it arrives.
+  function postMessage(action, data, callback) {
+    if (!sessionKey) {
+      pendingQueue.push({ action: action, data: data, callback: callback });
+      return;
+    }
+    var messageId = generateUUID();
+    var msg = { action: action, data: data || {}, messageId: messageId, sessionKey: sessionKey, api: 'component' };
+    if (callback) sentMessages.push({ messageId: messageId, callback: callback });
     window.parent.postMessage(JSON.stringify(msg), '*');
   }
 
-  // ── SN message handler ──────────────────────────────────────
-  window.addEventListener('message', function (event) {
+  // Some SN versions require an explicit ready signal before they send
+  // component-registered. Send it now (and retry briefly).
+  function sendReady() {
+    window.parent.postMessage(JSON.stringify({
+      action: 'ready', data: {}, messageId: generateUUID(), api: 'component'
+    }), '*');
+  }
+
+  // ── Note loading ─────────────────────────────────────────────
+  function loadItem(item) {
+    if (!item || !item.content) return;
+    if (item.isMetadataUpdate && noteLoaded) return;
+    currentItem = JSON.parse(JSON.stringify(item));
+    if (typeof currentItem.content === 'string') {
+      currentItem.content = JSON.parse(currentItem.content);
+    }
+    input.value = currentItem.content.text || '';
+    noteLoaded = true;
+    setStatus('');
+    render();
+  }
+
+  // ── Message handler ───────────────────────────────────────────
+  function handleMessage(event) {
     var msg;
     try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
     catch (e) { return; }
     if (!msg || !msg.action) return;
 
+    console.log('[SN] rx:', msg.action, msg.original ? '(reply)' : '');
+
     if (msg.action === 'component-registered') {
       sessionKey = msg.sessionKey || (msg.data && msg.data.sessionKey) || null;
-      registered = true;
-      clearInterval(readyTimer);
-      send('stream-context-item');
+      setStatus(sessionKey ? 'loading note...' : 'loading note... (no sessionKey!)');
+      // Flush all queued messages now that we have the session key
+      var queue = pendingQueue.splice(0);
+      queue.forEach(function (m) { postMessage(m.action, m.data, m.callback); });
       return;
     }
 
-    if (msg.action === 'stream-context-item') {
-      var item = msg.data && msg.data.item;
-      if (!item || !item.content) return;
-      if (item.isMetadataUpdate && noteLoaded) return;
+    // Proactive stream-context-item push (old-style SN, no original)
+    if (msg.action === 'stream-context-item' && !msg.original) {
+      if (msg.data && msg.data.item) loadItem(msg.data.item);
+      return;
+    }
 
-      // Deep-clone the full item so we can mutate safely
-      currentItem = JSON.parse(JSON.stringify(item));
-
-      // Determine whether SN delivered content as a string or object,
-      // and normalise to an object for internal use — we re-stringify on save.
-      var contentObj;
-      if (typeof currentItem.content === 'string') {
-        try { contentObj = JSON.parse(currentItem.content); }
-        catch (e) { contentObj = { text: currentItem.content }; }
-      } else {
-        contentObj = currentItem.content;
+    // Reply to one of our requests, matched by messageId
+    if (msg.original && msg.original.messageId) {
+      for (var i = 0; i < sentMessages.length; i++) {
+        if (sentMessages[i].messageId === msg.original.messageId) {
+          if (sentMessages[i].callback) sentMessages[i].callback(msg.data);
+          break;
+        }
       }
-
-      // Store the parsed content object on the item
-      currentItem.content = contentObj;
-
-      var text = contentObj.text || '';
-      input.value = text;
-      noteLoaded = true;
-      render();
-      return;
     }
-
-    // SN confirms it received our save — show "Saved" ✓
-    if (msg.action === 'reply' || msg.action === 'component-reply') {
-      // SN sends back a reply to our save-items call
-      showSaved();
-      return;
-    }
-  });
-
-  // Step 1 — announce ourselves; retry until SN acknowledges
-  send('ready');
-  readyTimer = setInterval(function () {
-    if (registered) { clearInterval(readyTimer); return; }
-    send('ready');
-  }, 500);
-
-  // ── Save ────────────────────────────────────────────────────
-  function doSave() {
-    if (!noteLoaded || !currentItem) return;
-
-    // Update the text field on the content object
-    currentItem.content.text = input.value;
-
-    // SN's component relay expects content to be sent as a JSON *string*,
-    // not a plain object. Deep-clone the item and stringify content before sending.
-    var itemToSend = JSON.parse(JSON.stringify(currentItem));
-    itemToSend.content = JSON.stringify(itemToSend.content);
-
-    showSaving();
-    send('save-items', { items: [itemToSend] });
-
-    // Fallback: if SN doesn't echo a reply within 2 s, assume saved
-    clearTimeout(savedTimer);
-    savedTimer = setTimeout(showSaved, 2000);
   }
 
-  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 300); }
+  // React Native sends 'message' on document, not window
+  window.addEventListener('message', handleMessage, false);
+  document.addEventListener('message', handleMessage, false);
+
+  // ── Initialise ───────────────────────────────────────────────
+  setStatus('connecting...');
+
+  // Subscribe to the current note. Queued until sessionKey arrives.
+  postMessage('stream-context-item', {}, function (data) {
+    if (data && data.item) loadItem(data.item);
+  });
+
+  // Signal readiness (required by some SN versions; no-op on others)
+  sendReady();
+  var readyCount = 0;
+  var readyTimer = setInterval(function () {
+    if (sessionKey || ++readyCount >= 10) { clearInterval(readyTimer); return; }
+    sendReady();
+  }, 500);
+
+  // ── Save ─────────────────────────────────────────────────────
+  function doSave() {
+    if (!noteLoaded || !currentItem) return;
+    currentItem.content.text = input.value;
+    postMessage('save-items', { items: [currentItem] });
+    clearTimeout(statusTimer);
+    setStatus('saved');
+    statusTimer = setTimeout(function () { setStatus(''); }, 1500);
+  }
+
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 250); }
   function saveNow()       { clearTimeout(saveTimer); doSave(); }
 
   input.addEventListener('input', function () { render(); scheduleSave(); });
@@ -411,7 +350,7 @@
     }
     if (!ins) { var ulm=line.match(/^(\s*)([-*+])\s/); if(ulm){ if(!line.slice(ulm[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=ulm[1]+ulm[2]+' '; } }
     if (!ins) { var olm=line.match(/^(\s*)(\d+)([.\)])\s/); if(olm){ if(!line.slice(olm[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=olm[1]+(+olm[2]+1)+olm[3]+' '; } }
-    if (!ins) { var bqm2=line.match(/^(\s*>+\s?)/); if(bqm2){ if(!line.slice(bqm2[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=bqm2[1]; } }
+    if (!ins) { var bqm=line.match(/^(\s*>+\s?)/); if(bqm){ if(!line.slice(bqm[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=bqm[1]; } }
     if (ins) { ev.preventDefault(); input.value=v.slice(0,s)+'\n'+ins+v.slice(input.selectionEnd); input.selectionStart=input.selectionEnd=s+1+ins.length; render(); scheduleSave(); }
   });
 
