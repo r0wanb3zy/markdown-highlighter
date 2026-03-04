@@ -40,6 +40,75 @@
 
   #input::selection { background: rgba(56, 139, 253, 0.3); }
 
+  /* ── Save status indicator ─────────────────────────────────── */
+  #save-status {
+    position: fixed;
+    bottom: 14px;
+    right: 16px;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px 5px 8px;
+    border-radius: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 11.5px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease, background 0.25s ease, color 0.25s ease;
+    user-select: none;
+  }
+
+  #save-status.saving {
+    opacity: 1;
+    background: rgba(30, 38, 50, 0.92);
+    color: #8b949e;
+    border: 1px solid rgba(255,255,255,0.07);
+    backdrop-filter: blur(6px);
+  }
+
+  #save-status.saved {
+    opacity: 1;
+    background: rgba(22, 38, 28, 0.92);
+    color: #3fb950;
+    border: 1px solid rgba(63, 185, 80, 0.2);
+    backdrop-filter: blur(6px);
+  }
+
+  #save-status.hidden {
+    opacity: 0;
+  }
+
+  /* Spinner */
+  .spinner {
+    width: 11px;
+    height: 11px;
+    border: 1.5px solid rgba(139, 148, 158, 0.25);
+    border-top-color: #8b949e;
+    border-radius: 50%;
+    animation: spin 0.65s linear infinite;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Checkmark */
+  .check-icon {
+    width: 11px;
+    height: 11px;
+    flex-shrink: 0;
+    display: none;
+  }
+
+  #save-status.saved .check-icon { display: block; }
+  #save-status.saved .spinner    { display: none; }
+  #save-status.saving .check-icon { display: none; }
+  #save-status.saving .spinner    { display: block; }
+
   /* Syntax colours */
   .tx  { color: #e6edf3; }
   .h1  { color: #ff7b72; font-weight: 700; }
@@ -76,15 +145,6 @@
   #input::-webkit-scrollbar, #backdrop::-webkit-scrollbar { width: 6px; }
   #input::-webkit-scrollbar-track, #backdrop::-webkit-scrollbar-track { background: transparent; }
   #input::-webkit-scrollbar-thumb, #backdrop::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
-
-  /* Debug status bar — remove once saving is confirmed working */
-  #status {
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
-    background: #161b22; border-top: 1px solid #30363d;
-    color: #8b949e; font-size: 11px; padding: 3px 10px;
-    font-family: monospace;
-  }
-  #status:empty { display: none; }
 </style>
 </head>
 <body>
@@ -92,27 +152,54 @@
   <div id="backdrop"><div id="highlight-layer"></div></div>
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
 </div>
-<div id="status">connecting...</div>
+
+<!-- Save status pill -->
+<div id="save-status" class="hidden">
+  <svg class="check-icon" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 6.5L4.5 9L10 3.5" stroke="#3fb950" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <div class="spinner"></div>
+  <span id="save-label">Saving…</span>
+</div>
+
 <script>
 (function () {
   'use strict';
 
-  var input   = document.getElementById('input');
-  var backdrop= document.getElementById('backdrop');
-  var hl      = document.getElementById('highlight-layer');
-  var statusEl= document.getElementById('status');
-
-  function setStatus(msg) { statusEl.textContent = msg; }
+  var input    = document.getElementById('input');
+  var backdrop = document.getElementById('backdrop');
+  var hl       = document.getElementById('highlight-layer');
+  var statusEl = document.getElementById('save-status');
+  var labelEl  = document.getElementById('save-label');
 
   // ── State ──────────────────────────────────────────────────
-  var sessionKey   = null;
-  var registered   = false; // true after component-registered received
-  var currentItem  = null;  // the full item object SN sent us
-  var noteLoaded   = false; // true only after SN delivers the note
-  var saveTimer    = null;
-  var readyTimer   = null;  // retry sending 'ready' until acknowledged
-  var noteTimer    = null;  // retry stream-context-item until note arrives
-  var statusTimer  = null;  // clears the "saved" flash
+  var sessionKey  = null;
+  var registered  = false;
+  var currentItem = null;
+  var noteLoaded  = false;
+  var saveTimer   = null;
+  var readyTimer  = null;
+
+  // Save-status timers
+  var savedTimer   = null;  // auto-hide after showing "Saved"
+  var hideTimer    = null;  // fade-out delay
+
+  // ── Save status UI ──────────────────────────────────────────
+  function showSaving() {
+    clearTimeout(savedTimer);
+    clearTimeout(hideTimer);
+    statusEl.className = 'saving';
+    labelEl.textContent = 'Saving\u2026';
+  }
+
+  function showSaved() {
+    statusEl.className = 'saved';
+    labelEl.textContent = 'Saved';
+    // Hold "Saved" for 1.8 s then fade out
+    savedTimer = setTimeout(function () {
+      statusEl.className = 'hidden';
+    }, 1800);
+  }
 
   // ── Messaging helpers ───────────────────────────────────────
   function uid() { return Math.random().toString(36).slice(2) + Date.now(); }
@@ -130,64 +217,51 @@
     catch (e) { return; }
     if (!msg || !msg.action) return;
 
-    console.log('[SN Plugin] rx:', msg.action);
-
-    // Step 2: SN confirms registration → ask for the note
     if (msg.action === 'component-registered') {
-      // Newer SN versions may nest the key inside data
       sessionKey = msg.sessionKey || (msg.data && msg.data.sessionKey) || null;
       registered = true;
       clearInterval(readyTimer);
-      setStatus('loading note... (sessionKey ' + (sessionKey ? 'ok' : 'MISSING') + ')');
-      console.log('[SN Plugin] component-registered. sessionKey:', sessionKey ? 'present' : 'MISSING');
       send('stream-context-item');
-      // Retry if SN doesn't respond with the note within 1 s
-      noteTimer = setInterval(function () {
-        if (noteLoaded) { clearInterval(noteTimer); return; }
-        console.log('[SN Plugin] re-requesting stream-context-item');
-        send('stream-context-item');
-      }, 1000);
       return;
     }
 
-    // Step 3: SN delivers the note to us
     if (msg.action === 'stream-context-item') {
       var item = msg.data && msg.data.item;
-      console.log('[SN Plugin] stream-context-item received. item:', item ? 'present' : 'MISSING',
-        'isMetadataUpdate:', item && item.isMetadataUpdate,
-        'hasContent:', item && !!item.content);
-      if (!item || !item.content) {
-        setStatus('stream-context-item: item or content missing');
-        return;
-      }
-
-      // Once the note is loaded, skip pure metadata updates (tags, pin, etc.)
-      // but always accept the FIRST delivery so the note content appears,
-      // even if SN happens to mark it as a metadata update
+      if (!item || !item.content) return;
       if (item.isMetadataUpdate && noteLoaded) return;
 
-      clearInterval(noteTimer);
-
-      // Store the full item so SN gets back exactly what it expects on save
+      // Deep-clone the full item so we can mutate safely
       currentItem = JSON.parse(JSON.stringify(item));
-      // SN may deliver content as a JSON string — parse it if so
+
+      // Determine whether SN delivered content as a string or object,
+      // and normalise to an object for internal use — we re-stringify on save.
+      var contentObj;
       if (typeof currentItem.content === 'string') {
-        currentItem.content = JSON.parse(currentItem.content);
+        try { contentObj = JSON.parse(currentItem.content); }
+        catch (e) { contentObj = { text: currentItem.content }; }
+      } else {
+        contentObj = currentItem.content;
       }
 
-      // Load text into editor
-      var text = currentItem.content.text || '';
+      // Store the parsed content object on the item
+      currentItem.content = contentObj;
+
+      var text = contentObj.text || '';
       input.value = text;
       noteLoaded = true;
-      setStatus('');
-      console.log('[SN Plugin] Note loaded. text length:', text.length, 'uuid:', currentItem.uuid);
       render();
+      return;
+    }
+
+    // SN confirms it received our save — show "Saved" ✓
+    if (msg.action === 'reply' || msg.action === 'component-reply') {
+      // SN sends back a reply to our save-items call
+      showSaved();
       return;
     }
   });
 
-  // Step 1: tell SN we exist — retry every 500 ms until acknowledged
-  setStatus('connecting...');
+  // Step 1 — announce ourselves; retry until SN acknowledges
   send('ready');
   readyTimer = setInterval(function () {
     if (registered) { clearInterval(readyTimer); return; }
@@ -197,15 +271,24 @@
   // ── Save ────────────────────────────────────────────────────
   function doSave() {
     if (!noteLoaded || !currentItem) return;
+
+    // Update the text field on the content object
     currentItem.content.text = input.value;
-    console.log('[SN Plugin] save-items sending. text length:', input.value.length);
-    send('save-items', { items: [currentItem] });
-    clearTimeout(statusTimer);
-    setStatus('saved');
-    statusTimer = setTimeout(function () { setStatus(''); }, 1500);
+
+    // SN's component relay expects content to be sent as a JSON *string*,
+    // not a plain object. Deep-clone the item and stringify content before sending.
+    var itemToSend = JSON.parse(JSON.stringify(currentItem));
+    itemToSend.content = JSON.stringify(itemToSend.content);
+
+    showSaving();
+    send('save-items', { items: [itemToSend] });
+
+    // Fallback: if SN doesn't echo a reply within 2 s, assume saved
+    clearTimeout(savedTimer);
+    savedTimer = setTimeout(showSaved, 2000);
   }
 
-  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 100); }
+  function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 300); }
   function saveNow()       { clearTimeout(saveTimer); doSave(); }
 
   input.addEventListener('input', function () { render(); scheduleSave(); });
@@ -328,7 +411,7 @@
     }
     if (!ins) { var ulm=line.match(/^(\s*)([-*+])\s/); if(ulm){ if(!line.slice(ulm[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=ulm[1]+ulm[2]+' '; } }
     if (!ins) { var olm=line.match(/^(\s*)(\d+)([.\)])\s/); if(olm){ if(!line.slice(olm[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=olm[1]+(+olm[2]+1)+olm[3]+' '; } }
-    if (!ins) { var bqm=line.match(/^(\s*>+\s?)/); if(bqm){ if(!line.slice(bqm[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=bqm[1]; } }
+    if (!ins) { var bqm2=line.match(/^(\s*>+\s?)/); if(bqm2){ if(!line.slice(bqm2[0].length).trim()){ev.preventDefault();input.value=v.slice(0,ls)+'\n'+v.slice(s);input.selectionStart=input.selectionEnd=ls+1;render();scheduleSave();return;} ins=bqm2[1]; } }
     if (ins) { ev.preventDefault(); input.value=v.slice(0,s)+'\n'+ins+v.slice(input.selectionEnd); input.selectionStart=input.selectionEnd=s+1+ins.length; render(); scheduleSave(); }
   });
 
