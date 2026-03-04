@@ -77,14 +77,6 @@
   #input::-webkit-scrollbar-track, #backdrop::-webkit-scrollbar-track { background: transparent; }
   #input::-webkit-scrollbar-thumb, #backdrop::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
 
-  /* Debug status bar — remove once saving is confirmed working */
-  #status {
-    position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
-    background: #161b22; border-top: 1px solid #30363d;
-    color: #8b949e; font-size: 11px; padding: 3px 10px;
-    font-family: monospace;
-  }
-  #status:empty { display: none; }
 </style>
 </head>
 <body>
@@ -92,7 +84,6 @@
   <div id="backdrop"><div id="highlight-layer"></div></div>
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
 </div>
-<div id="status">connecting...</div>
 <script>
 (function () {
   'use strict';
@@ -100,10 +91,6 @@
   var input    = document.getElementById('input');
   var backdrop = document.getElementById('backdrop');
   var hl       = document.getElementById('highlight-layer');
-  var statusEl = document.getElementById('status');
-
-  function setStatus(m) { if (statusEl) statusEl.textContent = m; }
-
   // ── Protocol state ───────────────────────────────────────────
   // Modelled on the sn-extension-api library used by working SN editors.
   //
@@ -116,7 +103,6 @@
   var currentItem  = null;
   var noteLoaded   = false;
   var saveTimer    = null;
-  var statusTimer  = null;
   var pendingQueue = [];  // messages queued before sessionKey is known
   var sentMessages = [];  // sent messages with response callbacks
 
@@ -158,7 +144,6 @@
     }
     input.value = currentItem.content.text || '';
     noteLoaded = true;
-    setStatus('');
     render();
   }
 
@@ -167,14 +152,10 @@
     var msg;
     try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
     catch (e) { return; }
-    if (!msg || !msg.action) return;
-
-    console.log('[SN] rx:', msg.action, msg.original ? '(reply)' : '');
+    if (!msg) return;
 
     if (msg.action === 'component-registered') {
       sessionKey = msg.sessionKey || (msg.data && msg.data.sessionKey) || null;
-      setStatus(sessionKey ? 'loading note...' : 'loading note... (no sessionKey!)');
-      // Flush all queued messages now that we have the session key
       var queue = pendingQueue.splice(0);
       queue.forEach(function (m) { postMessage(m.action, m.data, m.callback); });
       return;
@@ -202,8 +183,6 @@
   document.addEventListener('message', handleMessage, false);
 
   // ── Initialise ───────────────────────────────────────────────
-  setStatus('connecting...');
-
   // Subscribe to the current note. Queued until sessionKey arrives.
   postMessage('stream-context-item', {}, function (data) {
     if (data && data.item) loadItem(data.item);
@@ -222,9 +201,6 @@
     if (!noteLoaded || !currentItem) return;
     currentItem.content.text = input.value;
     postMessage('save-items', { items: [currentItem] });
-    clearTimeout(statusTimer);
-    setStatus('saved');
-    statusTimer = setTimeout(function () { setStatus(''); }, 1500);
   }
 
   function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 250); }
