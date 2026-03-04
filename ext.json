@@ -1,10 +1,12 @@
 {
-  "identifier": "com.github.r0wanb3zy.md-highlight-editor",
-  "name": "Markdown Highlight Editor",
-  "description": "Plain text editor with colour-coded markdown syntax highlighting. Headings, bold, italic, code, links, lists and more — all highlighted in a different colour so your markdown is easier to read at a glance.",
+  "identifier": "com.r0wanb3zy.markdown-highlighter",
+  "name": "Markdown Syntax Highlighter",
   "content_type": "SN|Component",
   "area": "editor-editor",
-  "version": "1.0.0",
-  "url": "https://r0wanb3zy.github.io/sn-md-highlight-editor/",
-  "latest_url": "https://r0wanb3zy.github.io/sn-md-highlight-editor/ext.json"
+  "version": "1.0.19",
+  "description": "Highlights raw Markdown syntax for easier reading.",
+  "url": "https://r0wanb3zy.github.io/markdown-highlighter/index.html",
+  "latest_url": "https://r0wanb3zy.github.io/markdown-highlighter/ext.json",
+  "marketing_url": "",
+  "thumbnail_url": ""
 }
