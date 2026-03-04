@@ -76,6 +76,15 @@
   #input::-webkit-scrollbar, #backdrop::-webkit-scrollbar { width: 6px; }
   #input::-webkit-scrollbar-track, #backdrop::-webkit-scrollbar-track { background: transparent; }
   #input::-webkit-scrollbar-thumb, #backdrop::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+  /* Debug status bar — remove once saving is confirmed working */
+  #status {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 999;
+    background: #161b22; border-top: 1px solid #30363d;
+    color: #8b949e; font-size: 11px; padding: 3px 10px;
+    font-family: monospace;
+  }
+  #status:empty { display: none; }
 </style>
 </head>
 <body>
@@ -83,6 +92,7 @@
   <div id="backdrop"><div id="highlight-layer"></div></div>
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
 </div>
+<div id="status">connecting...</div>
 <script>
 (function () {
   'use strict';
@@ -90,6 +100,9 @@
   var input   = document.getElementById('input');
   var backdrop= document.getElementById('backdrop');
   var hl      = document.getElementById('highlight-layer');
+  var statusEl= document.getElementById('status');
+
+  function setStatus(msg) { statusEl.textContent = msg; }
 
   // ── State ──────────────────────────────────────────────────
   var sessionKey   = null;
@@ -98,6 +111,8 @@
   var noteLoaded   = false; // true only after SN delivers the note
   var saveTimer    = null;
   var readyTimer   = null;  // retry sending 'ready' until acknowledged
+  var noteTimer    = null;  // retry stream-context-item until note arrives
+  var statusTimer  = null;  // clears the "saved" flash
 
   // ── Messaging helpers ───────────────────────────────────────
   function uid() { return Math.random().toString(36).slice(2) + Date.now(); }
@@ -115,49 +130,64 @@
     catch (e) { return; }
     if (!msg || !msg.action) return;
 
+    console.log('[SN Plugin] rx:', msg.action);
+
     // Step 2: SN confirms registration → ask for the note
     if (msg.action === 'component-registered') {
-      sessionKey = msg.sessionKey || null;
+      // Newer SN versions may nest the key inside data
+      sessionKey = msg.sessionKey || (msg.data && msg.data.sessionKey) || null;
       registered = true;
-      clearInterval(readyTimer); // stop retrying 'ready'
+      clearInterval(readyTimer);
+      setStatus('loading note... (sessionKey ' + (sessionKey ? 'ok' : 'MISSING') + ')');
+      console.log('[SN Plugin] component-registered. sessionKey:', sessionKey ? 'present' : 'MISSING');
       send('stream-context-item');
+      // Retry if SN doesn't respond with the note within 1 s
+      noteTimer = setInterval(function () {
+        if (noteLoaded) { clearInterval(noteTimer); return; }
+        console.log('[SN Plugin] re-requesting stream-context-item');
+        send('stream-context-item');
+      }, 1000);
       return;
     }
 
     // Step 3: SN delivers the note to us
     if (msg.action === 'stream-context-item') {
       var item = msg.data && msg.data.item;
-      if (!item || !item.content) return;
+      console.log('[SN Plugin] stream-context-item received. item:', item ? 'present' : 'MISSING',
+        'isMetadataUpdate:', item && item.isMetadataUpdate,
+        'hasContent:', item && !!item.content);
+      if (!item || !item.content) {
+        setStatus('stream-context-item: item or content missing');
+        return;
+      }
 
       // Once the note is loaded, skip pure metadata updates (tags, pin, etc.)
       // but always accept the FIRST delivery so the note content appears,
       // even if SN happens to mark it as a metadata update
       if (item.isMetadataUpdate && noteLoaded) return;
 
-      // SN may deliver content as a JSON string — parse it if so
-      var content = typeof item.content === 'string' ? JSON.parse(item.content) : item.content;
+      clearInterval(noteTimer);
 
-      // Only store the fields SN needs back on save — sending extra
-      // internal fields (encryption keys, dirty flags, etc.) can cause
-      // SN to silently reject the save
-      currentItem = {
-        uuid: item.uuid,
-        content_type: item.content_type,
-        content: JSON.parse(JSON.stringify(content))
-      };
+      // Store the full item so SN gets back exactly what it expects on save
+      currentItem = JSON.parse(JSON.stringify(item));
+      // SN may deliver content as a JSON string — parse it if so
+      if (typeof currentItem.content === 'string') {
+        currentItem.content = JSON.parse(currentItem.content);
+      }
 
       // Load text into editor
       var text = currentItem.content.text || '';
       input.value = text;
-      noteLoaded = true;   // ← only set after real note arrives
+      noteLoaded = true;
+      setStatus('');
+      console.log('[SN Plugin] Note loaded. text length:', text.length, 'uuid:', currentItem.uuid);
       render();
       return;
     }
   });
 
-  // Step 1: tell SN we exist — retry every 500 ms until acknowledged,
-  // because the parent frame may not be listening at the exact moment
-  // the iframe loads (race condition seen in practice)
+  // Step 1: tell SN we exist — retry every 500 ms until acknowledged
+  setStatus('connecting...');
   send('ready');
   readyTimer = setInterval(function () {
     if (registered) { clearInterval(readyTimer); return; }
@@ -166,14 +196,13 @@
 
   // ── Save ────────────────────────────────────────────────────
   function doSave() {
-    // NEVER save if we haven't received the note yet —
-    // this prevents overwriting a note with empty content
     if (!noteLoaded || !currentItem) return;
-
     currentItem.content.text = input.value;
-
-    // Send back the complete item — SN needs all original fields
+    console.log('[SN Plugin] save-items sending. text length:', input.value.length);
     send('save-items', { items: [currentItem] });
+    clearTimeout(statusTimer);
+    setStatus('saved');
+    statusTimer = setTimeout(function () { setStatus(''); }, 1500);
   }
 
   function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 100); }
