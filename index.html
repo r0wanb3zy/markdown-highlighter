@@ -104,11 +104,11 @@
   //  STANDARD NOTES — self-contained save protocol, no libraries
   //
   //  How it works:
-  //  1. On load, send 'ready' to parent (SN)
-  //  2. SN replies with 'component-registered' containing a sessionKey
-  //  3. We send 'stream-context-item' to ask for the current note
-  //  4. SN sends us the note via 'stream-context-item'
-  //  5. When user types, we send 'save-items' with the updated note
+  //  1. SN sends 'component-registered' (proactively, when iframe loads)
+  //  2. We send 'stream-context-item' to subscribe to the current note
+  //     and 'themes-activated' to complete the handshake
+  //  3. SN sends us the note via 'stream-context-item'
+  //  4. When user types, we send 'save-items' with the updated note
   // ================================================================
 
   var sessionKey = null;
@@ -120,25 +120,29 @@
   }
 
   function post(action, data) {
-    window.parent.postMessage(JSON.stringify({
+    // Send as a plain object (not JSON-stringified) to match the official
+    // @standardnotes/component-relay protocol for web/desktop environments.
+    window.parent.postMessage({
       action: action,
       data: data || {},
       messageId: genId(),
       sessionKey: sessionKey,
       api: 'component'
-    }), '*');
+    }, '*');
   }
 
-  window.addEventListener('message', function(event) {
+  function onMessage(event) {
     var msg;
     try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
     catch(e) { return; }
     if (!msg || !msg.action) return;
 
     if (msg.action === 'component-registered') {
-      sessionKey = msg.sessionKey || null;
-      // Ask SN to stream us the current note
+      sessionKey = msg.sessionKey || (msg.data && msg.data.sessionKey) || null;
+      // Request the current note from SN
       post('stream-context-item');
+      // Acknowledge theme activation (required by the SN component protocol)
+      post('themes-activated');
     }
 
     if (msg.action === 'stream-context-item') {
@@ -153,9 +157,14 @@
         render();
       }
     }
-  });
+  }
 
-  // Step 1: announce we are ready — SN won't talk to us until we do this
+  // Register on both window and document — some WebView environments fire on document
+  window.addEventListener('message', onMessage);
+  document.addEventListener('message', onMessage);
+
+  // Send 'ready' for backward compat with older SN versions; newer SN sends
+  // 'component-registered' proactively when the iframe loads (no trigger needed).
   post('ready');
 
   function doSave() {
