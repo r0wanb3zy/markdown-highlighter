@@ -47,7 +47,6 @@
   #input::selection { background: rgba(56, 139, 253, 0.3); }
   #input::-moz-selection { background: rgba(56, 139, 253, 0.3); }
 
-  /* Syntax colors */
   .h1 { color: #ff7b72; font-weight: 700; }
   .h2 { color: #ffa657; font-weight: 700; }
   .h3 { color: #e3b341; font-weight: 600; }
@@ -92,39 +91,116 @@
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
 </div>
 
-<!-- sn-extension-api handles all Standard Notes communication reliably -->
-<script src="https://cdn.jsdelivr.net/npm/sn-extension-api@latest/dist/index.js"></script>
-
 <script>
 (function() {
   'use strict';
 
-  var input   = document.getElementById('input');
+  var input    = document.getElementById('input');
   var backdrop = document.getElementById('backdrop');
-  var hl      = document.getElementById('highlight-layer');
+  var hl       = document.getElementById('highlight-layer');
 
   // ================================================================
-  //  STANDARD NOTES — via sn-extension-api (Matthew Nienow's library)
-  //  This handles the full component-relay handshake, streaming,
-  //  debounced saving, and cross-platform edge cases for us.
+  //  STANDARD NOTES — ComponentRelay protocol, correctly implemented
+  //
+  //  Root cause of original failure: postMessage was sending a plain
+  //  JS object, but Standard Notes expects a JSON *string*.
+  //  Secondary issues fixed:
+  //    - stream-context-item sent only after sessionKey is known
+  //    - save-items sends a deep copy of the full item (not just text)
+  //    - isMetadataUpdate messages are skipped (no spurious saves)
+  //    - document 'message' fallback for older desktop WebViews
   // ================================================================
 
-  // Initialize communication with Standard Notes (call only once)
-  snApi.initialize({ debounceSave: 300 });
+  var sessionKey  = null;
+  var currentItem = null;
+  var saveTimer   = null;
+  var subscribed  = false;
 
-  // Called by SN when the note is loaded or switched
-  snApi.subscribe(function() {
-    var text = snApi.text || '';
-    if (input.value !== text) {
-      input.value = text;
-      render();
+  function genId() {
+    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+
+  // THE KEY FIX: Standard Notes requires JSON.stringify on the payload
+  function post(action, data) {
+    var msg = {
+      action:     action,
+      data:       data || {},
+      messageId:  genId(),
+      sessionKey: sessionKey,
+      api:        'component'
+    };
+    window.parent.postMessage(JSON.stringify(msg), '*');
+  }
+
+  function subscribe() {
+    if (subscribed) return;
+    subscribed = true;
+    post('stream-context-item');
+  }
+
+  function handleMessage(event) {
+    var msg;
+    try {
+      msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    } catch(e) { return; }
+    if (!msg || !msg.action) return;
+
+    if (msg.action === 'component-registered') {
+      sessionKey = msg.sessionKey
+        || (msg.data && msg.data.sessionKey)
+        || null;
+      subscribe();
     }
+
+    if (msg.action === 'stream-context-item') {
+      var item = msg.data && msg.data.item;
+      if (!item) return;
+      if (item.isMetadataUpdate) return; // lock/tag change, not content
+      currentItem = item;
+      var text = (item.content && item.content.text) || '';
+      if (input.value !== text) {
+        input.value = text;
+        render();
+      }
+    }
+  }
+
+  window.addEventListener('message', handleMessage);
+  // Fallback: some older SN desktop WebViews fire on document
+  document.addEventListener('message', function(e) {
+    handleMessage(e);
   });
 
-  // On every keystroke: update highlight + tell SN to save
-  input.addEventListener('input', function() {
-    render();
-    snApi.text = input.value;   // sn-extension-api debounces and saves automatically
+  // Tell SN we exist — newer SN proactively sends component-registered,
+  // but sending 'ready' first supports older versions too.
+  post('ready');
+
+  // ----------------------------------------------------------------
+
+  function doSave() {
+    if (!currentItem) return;
+    // Deep-copy so we preserve all original fields (references, appData etc.)
+    var item = JSON.parse(JSON.stringify(currentItem));
+    item.content.text = input.value;
+    item.content.preview_plain = input.value.substring(0, 80).replace(/\n/g, ' ');
+    post('save-items', { items: [item] });
+  }
+
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 300);
+  }
+
+  function saveNow() {
+    clearTimeout(saveTimer);
+    doSave();
+  }
+
+  input.addEventListener('input', function() { render(); save(); });
+  input.addEventListener('blur',  saveNow);
+  window.addEventListener('blur', saveNow);
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) saveNow();
   });
 
   // ================================================================
@@ -174,7 +250,7 @@
     var out = [];
     var inCode = false;
     for (var i = 0; i < lines.length; i++) {
-      var raw = lines[i];
+      var raw     = lines[i];
       var escaped = esc(raw);
       if (/^(`{3,}|~{3,})/.test(raw)) {
         inCode = !inCode;
@@ -199,7 +275,7 @@
       if (um) {
         var cm = um[3].match(/^\[([ xX])\]\s?(.*)/);
         if (cm) {
-          var cc = cm[1]!==' '?'con':'coff';
+          var cc = cm[1]!==' ' ? 'con' : 'coff';
           out.push('<span class="tx">'+esc(um[1])+'</span><span class="ul">'+esc(um[2])+'</span><span class="tx"> </span><span class="'+cc+'">['+esc(cm[1])+']</span><span class="tx"> </span>'+inl(esc(cm[2])));
         } else {
           out.push('<span class="tx">'+esc(um[1])+'</span><span class="ul">'+esc(um[2])+'</span><span class="tx"> </span>'+inl(esc(um[3])));
@@ -217,81 +293,85 @@
   }
 
   function render() { hl.innerHTML = highlight(input.value) + '\n'; }
-  function syncScroll() { backdrop.scrollTop = input.scrollTop; backdrop.scrollLeft = input.scrollLeft; }
 
+  function syncScroll() {
+    backdrop.scrollTop  = input.scrollTop;
+    backdrop.scrollLeft = input.scrollLeft;
+  }
   input.addEventListener('scroll', syncScroll);
 
-  // Smart Enter
+  // Smart Enter / Tab
   input.addEventListener('keydown', function(ev) {
     if (ev.key === 'Tab') {
       ev.preventDefault();
-      var s=input.selectionStart;
-      input.value=input.value.substring(0,s)+'  '+input.value.substring(input.selectionEnd);
-      input.selectionStart=input.selectionEnd=s+2;
-      render(); snApi.text = input.value; return;
+      var s = input.selectionStart;
+      input.value = input.value.substring(0,s) + '  ' + input.value.substring(input.selectionEnd);
+      input.selectionStart = input.selectionEnd = s + 2;
+      render(); save(); return;
     }
     if (ev.key !== 'Enter') return;
     var start = input.selectionStart;
-    var val = input.value;
-    var ls = val.lastIndexOf('\n', start-1)+1;
-    var line = val.substring(ls, start);
-    var ins = null;
+    var val   = input.value;
+    var ls    = val.lastIndexOf('\n', start-1) + 1;
+    var line  = val.substring(ls, start);
+    var ins   = null;
 
     var cbm = line.match(/^(\s*)([-*+])\s\[[ xX]\]\s/);
     if (cbm) {
-      if (line.replace(/^(\s*)([-*+])\s\[[ xX]\]\s/,'').trim()==='') {
+      if (line.replace(/^(\s*)([-*+])\s\[[ xX]\]\s/,'').trim() === '') {
         ev.preventDefault();
-        input.value=val.substring(0,ls)+'\n'+val.substring(start);
-        input.selectionStart=input.selectionEnd=ls+1;
-        render(); snApi.text = input.value; return;
+        input.value = val.substring(0,ls)+'\n'+val.substring(start);
+        input.selectionStart = input.selectionEnd = ls+1;
+        render(); save(); return;
       }
-      ins=cbm[1]+cbm[2]+' [ ] ';
+      ins = cbm[1]+cbm[2]+' [ ] ';
     }
     if (!ins) {
       var ulm = line.match(/^(\s*)([-*+])\s/);
       if (ulm) {
-        if (line.replace(/^(\s*)([-*+])\s/,'').trim()==='') {
+        if (line.replace(/^(\s*)([-*+])\s/,'').trim() === '') {
           ev.preventDefault();
-          input.value=val.substring(0,ls)+'\n'+val.substring(start);
-          input.selectionStart=input.selectionEnd=ls+1;
-          render(); snApi.text = input.value; return;
+          input.value = val.substring(0,ls)+'\n'+val.substring(start);
+          input.selectionStart = input.selectionEnd = ls+1;
+          render(); save(); return;
         }
-        ins=ulm[1]+ulm[2]+' ';
+        ins = ulm[1]+ulm[2]+' ';
       }
     }
     if (!ins) {
       var olm = line.match(/^(\s*)(\d+)([.\)])\s/);
       if (olm) {
-        if (line.replace(/^(\s*)(\d+)([.\)])\s/,'').trim()==='') {
+        if (line.replace(/^(\s*)(\d+)([.\)])\s/,'').trim() === '') {
           ev.preventDefault();
-          input.value=val.substring(0,ls)+'\n'+val.substring(start);
-          input.selectionStart=input.selectionEnd=ls+1;
-          render(); snApi.text = input.value; return;
+          input.value = val.substring(0,ls)+'\n'+val.substring(start);
+          input.selectionStart = input.selectionEnd = ls+1;
+          render(); save(); return;
         }
-        ins=olm[1]+(parseInt(olm[2],10)+1)+olm[3]+' ';
+        ins = olm[1]+(parseInt(olm[2],10)+1)+olm[3]+' ';
       }
     }
     if (!ins) {
       var bqm2 = line.match(/^(\s*>+\s?)/);
       if (bqm2) {
-        if (line.substring(bqm2[0].length).trim()==='') {
+        if (line.substring(bqm2[0].length).trim() === '') {
           ev.preventDefault();
-          input.value=val.substring(0,ls)+'\n'+val.substring(start);
-          input.selectionStart=input.selectionEnd=ls+1;
-          render(); snApi.text = input.value; return;
+          input.value = val.substring(0,ls)+'\n'+val.substring(start);
+          input.selectionStart = input.selectionEnd = ls+1;
+          render(); save(); return;
         }
-        ins=bqm2[1];
+        ins = bqm2[1];
       }
     }
     if (ins) {
       ev.preventDefault();
-      input.value=val.substring(0,start)+'\n'+ins+val.substring(input.selectionEnd);
-      input.selectionStart=input.selectionEnd=start+1+ins.length;
-      render(); snApi.text = input.value;
+      input.value = val.substring(0,start)+'\n'+ins+val.substring(input.selectionEnd);
+      input.selectionStart = input.selectionEnd = start+1+ins.length;
+      render(); save();
     }
   });
 
   render();
+
 })();
 </script>
 
