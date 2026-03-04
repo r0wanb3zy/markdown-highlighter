@@ -4,12 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Markdown Syntax Highlighter</title>
-
-<!-- Working CDN for ComponentRelay (use dist/dist.js from v2.1.2) -->
-<script src="https://unpkg.com/@standardnotes/component-relay@2.1.2/dist/dist.js"></script>
-
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
+
   html, body {
     height: 100%;
     width: 100%;
@@ -19,11 +16,14 @@
     font-size: 14px;
     color: #e6edf3;
   }
+
   #editor { width: 100%; height: 100%; position: relative; }
+
   #backdrop {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     overflow: auto; pointer-events: none; z-index: 1;
   }
+
   #highlight-layer {
     padding: 24px 28px;
     font-family: 'JetBrains Mono', 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
@@ -32,6 +32,7 @@
     letter-spacing: 0px; tab-size: 2; -moz-tab-size: 2;
     min-height: 100%;
   }
+
   #input {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     padding: 24px 28px; background: transparent; color: transparent;
@@ -42,8 +43,10 @@
     letter-spacing: 0px; tab-size: 2; -moz-tab-size: 2;
     -webkit-text-fill-color: transparent; overflow: auto;
   }
+
   #input::selection { background: rgba(56, 139, 253, 0.3); }
   #input::-moz-selection { background: rgba(56, 139, 253, 0.3); }
+
   /* Syntax colors */
   .h1 { color: #ff7b72; font-weight: 700; }
   .h2 { color: #ffa657; font-weight: 700; }
@@ -52,15 +55,15 @@
   .h5 { color: #79c0ff; font-weight: 600; }
   .h6 { color: #d2a8ff; font-weight: 600; }
   .hm { opacity: 0.35; }
-  .b { color: #ffa657; font-weight: 700; }
+  .b  { color: #ffa657; font-weight: 700; }
   .bm { color: #ffa657; opacity: 0.35; }
-  .i { color: #d2a8ff; font-style: italic; }
+  .i  { color: #d2a8ff; font-style: italic; }
   .im { color: #d2a8ff; opacity: 0.35; }
   .bi { color: #f0883e; font-weight: 700; font-style: italic; }
   .bim{ color: #f0883e; opacity: 0.35; }
-  .s { color: #6e7681; text-decoration: line-through; }
+  .s  { color: #6e7681; text-decoration: line-through; }
   .sm { color: #6e7681; opacity: 0.35; }
-  .c { color: #79c0ff; background: rgba(110,118,129,0.15); border-radius: 3px; }
+  .c  { color: #79c0ff; background: rgba(110,118,129,0.15); border-radius: 3px; }
   .cm { color: #79c0ff; opacity: 0.3; }
   .cf { color: #7ee787; opacity: 0.4; }
   .cb { color: #8b949e; }
@@ -76,12 +79,14 @@
   .coff{color: #484f58; font-weight: 700; }
   .hr { color: #30363d; font-weight: 700; }
   .tx { color: #e6edf3; }
+
   #input::-webkit-scrollbar, #backdrop::-webkit-scrollbar { width: 6px; }
   #input::-webkit-scrollbar-track, #backdrop::-webkit-scrollbar-track { background: transparent; }
   #input::-webkit-scrollbar-thumb, #backdrop::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
 </style>
 </head>
 <body>
+
 <div id="editor">
   <div id="backdrop"><div id="highlight-layer"></div></div>
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
@@ -90,58 +95,100 @@
 <script>
 (function() {
   'use strict';
+
   var input = document.getElementById('input');
   var backdrop = document.getElementById('backdrop');
   var hl = document.getElementById('highlight-layer');
 
-  // Modern Standard Notes integration via ComponentRelay
-  const relay = new ComponentRelay();
-  let currentText = '';
-  let saveTimer = null;
+  // ================================================================
+  //  STANDARD NOTES — self-contained save protocol, no libraries
+  //
+  //  How it works:
+  //  1. On load, send 'ready' to parent (SN)
+  //  2. SN replies with 'component-registered' containing a sessionKey
+  //  3. We send 'stream-context-item' to ask for the current note
+  //  4. SN sends us the note via 'stream-context-item'
+  //  5. When user types, we send 'save-items' with the updated note
+  // ================================================================
 
-  // Load note content when opened / updated
-  relay.streamContextItem((item) => {
-    if (item && item.content && item.content.text !== undefined) {
-      const text = item.content.text || '';
-      if (text !== currentText) {
+  var sessionKey = null;
+  var currentItem = null;
+  var saveTimer = null;
+
+  function genId() {
+    return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+
+  function post(action, data) {
+    window.parent.postMessage(JSON.stringify({
+      action: action,
+      data: data || {},
+      messageId: genId(),
+      sessionKey: sessionKey,
+      api: 'component'
+    }), '*');
+  }
+
+  window.addEventListener('message', function(event) {
+    var msg;
+    try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
+    catch(e) { return; }
+    if (!msg || !msg.action) return;
+
+    if (msg.action === 'component-registered') {
+      sessionKey = msg.sessionKey || null;
+      // Ask SN to stream us the current note
+      post('stream-context-item');
+    }
+
+    if (msg.action === 'stream-context-item') {
+      var item = msg.data && msg.data.item;
+      if (!item) return;
+      // isMetadataUpdate = SN is just telling us about a lock/tag change, not a new note
+      if (item.isMetadataUpdate) return;
+      currentItem = item;
+      var text = (item.content && item.content.text) ? item.content.text : '';
+      if (input.value !== text) {
         input.value = text;
-        currentText = text;
         render();
       }
     }
   });
 
-  // Debounced save – only when text actually changed
-  function save() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      const newText = input.value;
-      if (newText !== currentText) {
-        relay.save({
-          item: {
-            content_type: 'Note',
-            content: {
-              text: newText
-            }
-          }
-        });
-        currentText = newText;
-      }
-    }, 300); // 300ms debounce
+  // Step 1: announce we are ready — SN won't talk to us until we do this
+  post('ready');
+
+  function doSave() {
+    if (!currentItem) return;
+    // Update text on our local copy of the item
+    currentItem.content.text = input.value;
+    // Send the whole item back to SN — it will persist it
+    post('save-items', { items: [ currentItem ] });
   }
 
-  // Hook save to events
-  input.addEventListener('input', () => { render(); save(); });
-  input.addEventListener('blur', save);
-  window.addEventListener('blur', save);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 300);
+  }
+
+  function saveNow() {
+    clearTimeout(saveTimer);
+    doSave();
+  }
+
+  input.addEventListener('input', function() { render(); save(); });
+  input.addEventListener('blur', saveNow);
+  window.addEventListener('blur', saveNow);
+  document.addEventListener('visibilitychange', function() { if (document.hidden) saveNow(); });
 
   // ================================================================
-  // HIGHLIGHTING (original, unchanged)
+  //  HIGHLIGHTING  (your original code, unchanged)
   // ================================================================
+
   function esc(t) {
     return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+
   function inl(s) {
     s = s.replace(/!\[([^\]]*)\]\(([^)]*)\)/g, function(_,a,u) {
       return '<span class="ib">!</span><span class="lb">[</span><span class="lt">'+a+'</span><span class="lb">](</span><span class="lu">'+u+'</span><span class="lb">)</span>';
@@ -175,6 +222,7 @@
     });
     return s;
   }
+
   function highlight(text) {
     var lines = text.split('\n');
     var out = [];
@@ -217,29 +265,25 @@
         out.push('<span class="tx">'+esc(om[1])+'</span><span class="ol">'+esc(om[2])+'</span><span class="tx"> </span>'+inl(esc(om[3])));
         continue;
       }
+      // Plain text — must have explicit colour so it shows through the transparent textarea
       out.push('<span class="tx">'+inl(escaped)+'</span>');
     }
     return out.join('\n');
   }
-  function render() { 
-    hl.innerHTML = highlight(input.value) + '\n'; 
-  }
-  function syncScroll() { 
-    backdrop.scrollTop = input.scrollTop; 
-    backdrop.scrollLeft = input.scrollLeft; 
-  }
+
+  function render() { hl.innerHTML = highlight(input.value) + '\n'; }
+  function syncScroll() { backdrop.scrollTop = input.scrollTop; backdrop.scrollLeft = input.scrollLeft; }
+
   input.addEventListener('scroll', syncScroll);
 
-  // Smart Tab (4 spaces) and Enter
+  // Smart Enter
   input.addEventListener('keydown', function(ev) {
     if (ev.key === 'Tab') {
       ev.preventDefault();
-      var s = input.selectionStart;
-      input.value = input.value.substring(0,s) + '    ' + input.value.substring(input.selectionEnd);
-      input.selectionStart = input.selectionEnd = s + 4;
-      render(); 
-      save(); 
-      return;
+      var s=input.selectionStart;
+      input.value=input.value.substring(0,s)+'  '+input.value.substring(input.selectionEnd);
+      input.selectionStart=input.selectionEnd=s+2;
+      render(); save(); return;
     }
     if (ev.key !== 'Enter') return;
     var start = input.selectionStart;
@@ -247,6 +291,7 @@
     var ls = val.lastIndexOf('\n', start-1)+1;
     var line = val.substring(ls, start);
     var ins = null;
+
     var cbm = line.match(/^(\s*)([-*+])\s\[[ xX]\]\s/);
     if (cbm) {
       if (line.replace(/^(\s*)([-*+])\s\[[ xX]\]\s/,'').trim()==='') {
@@ -297,13 +342,13 @@
       ev.preventDefault();
       input.value=val.substring(0,start)+'\n'+ins+val.substring(input.selectionEnd);
       input.selectionStart=input.selectionEnd=start+1+ins.length;
-      render(); 
-      save();
+      render(); save();
     }
   });
 
   render();
 })();
 </script>
+
 </body>
 </html>
