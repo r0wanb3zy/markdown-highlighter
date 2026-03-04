@@ -92,106 +92,43 @@
   <textarea id="input" spellcheck="true" placeholder="Start writing Markdown..."></textarea>
 </div>
 
+<!-- sn-extension-api handles all Standard Notes communication reliably -->
+<script src="https://cdn.jsdelivr.net/npm/sn-extension-api@latest/dist/index.js"></script>
+
 <script>
 (function() {
   'use strict';
 
-  var input = document.getElementById('input');
+  var input   = document.getElementById('input');
   var backdrop = document.getElementById('backdrop');
-  var hl = document.getElementById('highlight-layer');
+  var hl      = document.getElementById('highlight-layer');
 
   // ================================================================
-  //  STANDARD NOTES — self-contained save protocol, no libraries
-  //
-  //  How it works:
-  //  1. SN sends 'component-registered' (proactively, when iframe loads)
-  //  2. We send 'stream-context-item' to subscribe to the current note
-  //     and 'themes-activated' to complete the handshake
-  //  3. SN sends us the note via 'stream-context-item'
-  //  4. When user types, we send 'save-items' with the updated note
+  //  STANDARD NOTES — via sn-extension-api (Matthew Nienow's library)
+  //  This handles the full component-relay handshake, streaming,
+  //  debounced saving, and cross-platform edge cases for us.
   // ================================================================
 
-  var sessionKey = null;
-  var currentItem = null;
-  var saveTimer = null;
+  // Initialize communication with Standard Notes (call only once)
+  snApi.initialize({ debounceSave: 300 });
 
-  function genId() {
-    return Math.random().toString(36).slice(2) + Date.now().toString(36);
-  }
-
-  function post(action, data) {
-    // Send as a plain object (not JSON-stringified) to match the official
-    // @standardnotes/component-relay protocol for web/desktop environments.
-    window.parent.postMessage({
-      action: action,
-      data: data || {},
-      messageId: genId(),
-      sessionKey: sessionKey,
-      api: 'component'
-    }, '*');
-  }
-
-  function onMessage(event) {
-    var msg;
-    try { msg = typeof event.data === 'string' ? JSON.parse(event.data) : event.data; }
-    catch(e) { return; }
-    if (!msg || !msg.action) return;
-
-    if (msg.action === 'component-registered') {
-      sessionKey = msg.sessionKey || (msg.data && msg.data.sessionKey) || null;
-      // Request the current note from SN
-      post('stream-context-item');
-      // Acknowledge theme activation (required by the SN component protocol)
-      post('themes-activated');
+  // Called by SN when the note is loaded or switched
+  snApi.subscribe(function() {
+    var text = snApi.text || '';
+    if (input.value !== text) {
+      input.value = text;
+      render();
     }
+  });
 
-    if (msg.action === 'stream-context-item') {
-      var item = msg.data && msg.data.item;
-      if (!item) return;
-      // isMetadataUpdate = SN is just telling us about a lock/tag change, not a new note
-      if (item.isMetadataUpdate) return;
-      currentItem = item;
-      var text = (item.content && item.content.text) ? item.content.text : '';
-      if (input.value !== text) {
-        input.value = text;
-        render();
-      }
-    }
-  }
-
-  // Register on both window and document — some WebView environments fire on document
-  window.addEventListener('message', onMessage);
-  document.addEventListener('message', onMessage);
-
-  // Send 'ready' for backward compat with older SN versions; newer SN sends
-  // 'component-registered' proactively when the iframe loads (no trigger needed).
-  post('ready');
-
-  function doSave() {
-    if (!currentItem) return;
-    // Update text on our local copy of the item
-    currentItem.content.text = input.value;
-    // Send the whole item back to SN — it will persist it
-    post('save-items', { items: [ currentItem ] });
-  }
-
-  function save() {
-    clearTimeout(saveTimer);
-    saveTimer = setTimeout(doSave, 300);
-  }
-
-  function saveNow() {
-    clearTimeout(saveTimer);
-    doSave();
-  }
-
-  input.addEventListener('input', function() { render(); save(); });
-  input.addEventListener('blur', saveNow);
-  window.addEventListener('blur', saveNow);
-  document.addEventListener('visibilitychange', function() { if (document.hidden) saveNow(); });
+  // On every keystroke: update highlight + tell SN to save
+  input.addEventListener('input', function() {
+    render();
+    snApi.text = input.value;   // sn-extension-api debounces and saves automatically
+  });
 
   // ================================================================
-  //  HIGHLIGHTING  (your original code, unchanged)
+  //  HIGHLIGHTING
   // ================================================================
 
   function esc(t) {
@@ -274,7 +211,6 @@
         out.push('<span class="tx">'+esc(om[1])+'</span><span class="ol">'+esc(om[2])+'</span><span class="tx"> </span>'+inl(esc(om[3])));
         continue;
       }
-      // Plain text — must have explicit colour so it shows through the transparent textarea
       out.push('<span class="tx">'+inl(escaped)+'</span>');
     }
     return out.join('\n');
@@ -292,7 +228,7 @@
       var s=input.selectionStart;
       input.value=input.value.substring(0,s)+'  '+input.value.substring(input.selectionEnd);
       input.selectionStart=input.selectionEnd=s+2;
-      render(); save(); return;
+      render(); snApi.text = input.value; return;
     }
     if (ev.key !== 'Enter') return;
     var start = input.selectionStart;
@@ -307,7 +243,7 @@
         ev.preventDefault();
         input.value=val.substring(0,ls)+'\n'+val.substring(start);
         input.selectionStart=input.selectionEnd=ls+1;
-        render(); save(); return;
+        render(); snApi.text = input.value; return;
       }
       ins=cbm[1]+cbm[2]+' [ ] ';
     }
@@ -318,7 +254,7 @@
           ev.preventDefault();
           input.value=val.substring(0,ls)+'\n'+val.substring(start);
           input.selectionStart=input.selectionEnd=ls+1;
-          render(); save(); return;
+          render(); snApi.text = input.value; return;
         }
         ins=ulm[1]+ulm[2]+' ';
       }
@@ -330,7 +266,7 @@
           ev.preventDefault();
           input.value=val.substring(0,ls)+'\n'+val.substring(start);
           input.selectionStart=input.selectionEnd=ls+1;
-          render(); save(); return;
+          render(); snApi.text = input.value; return;
         }
         ins=olm[1]+(parseInt(olm[2],10)+1)+olm[3]+' ';
       }
@@ -342,7 +278,7 @@
           ev.preventDefault();
           input.value=val.substring(0,ls)+'\n'+val.substring(start);
           input.selectionStart=input.selectionEnd=ls+1;
-          render(); save(); return;
+          render(); snApi.text = input.value; return;
         }
         ins=bqm2[1];
       }
@@ -351,7 +287,7 @@
       ev.preventDefault();
       input.value=val.substring(0,start)+'\n'+ins+val.substring(input.selectionEnd);
       input.selectionStart=input.selectionEnd=start+1+ins.length;
-      render(); save();
+      render(); snApi.text = input.value;
     }
   });
 
